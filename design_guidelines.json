@@ -1,0 +1,101 @@
+{
+  "theme": "dark",
+  "archetype": "Archetype 4: Swiss & High-Contrast (Authority, Clarity, Truth)",
+  "typography": {
+    "headings": "Cabinet Grotesk",
+    "body": "IBM Plex Sans",
+    "mono": "IBM Plex Mono",
+    "scale_rules": {
+      "H1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter font-black",
+      "H2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold",
+      "H3": "text-xl sm:text-2xl font-bold",
+      "body": "text-base leading-relaxed font-normal",
+      "labels": "text-xs uppercase tracking-[0.2em] font-medium"
+    },
+    "forbidden_fonts": [
+      "Inter",
+      "Roboto",
+      "Open Sans",
+      "Lato",
+      "Space Grotesk"
+    ]
+  },
+  "colors": {
+    "light": {
+      "background": "#FFFFFF",
+      "surface": "#F5F5F5",
+      "text": "#0A0A0A",
+      "border": "#E5E5E5"
+    },
+    "dark": {
+      "background": "#1A1A1D",
+      "surface": "#242427",
+      "text": "#FAFAFA",
+      "border": "#333336"
+    },
+    "brand": {
+      "primary": "#002FA7",
+      "success": "#00E676",
+      "warning": "#FFC300",
+      "danger": "#FF2A2A"
+    },
+    "forbidden_colors": [
+      "#7351B7",
+      "#1B93A4"
+    ]
+  },
+  "layouts": {
+    "strategy": "The Bento Grid Protocol (High Density Grid for Dashboards)",
+    "grid": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6",
+    "spacing": "Generous scaling: p-4, p-6, p-8 for containers. Tight gaps for data tables and dense info.",
+    "alignment": "Optical alignment over geometrical. Left-align dense content and forms.",
+    "surfaces": "GRID BORDERS (The 'Technical' Look). Expose the skeleton. border-collapse style layout, sharp edges, max 4px radius."
+  },
+  "components": {
+    "navigation": "Navbar + Sidebar layout. Sidebar fixed left, Navbar fixed top z-50. Use Solid Background with a hard bottom/right border.",
+    "table": "Shadcn Table customized. Sharp edges, 1px subtle borders (border-border), no shadow. Left-aligned text.",
+    "badges": "Status badges must use high-contrast. Success (Green), Warning (Yellow), Danger (Red) — map to each entity's own states. Flat solid background with 1px border matching text tint.",
+    "dialog": "Shadcn Dialog for entity creation forms. Solid background, sharp corners, harsh shadows (Neo-brutalist touch).",
+    "forms": "Shadcn Input, Select. Never use native html inputs. Radius 0 or max 4px.",
+    "cards": "Flat background, 1px subtle border, no soft shadows. Sharp and technical."
+  },
+  "states": {
+    "loading": "Use minimalist skeleton loaders or ASCII-style technical loaders. No generic spinners.",
+    "empty": "Generous negative space. Large text telling a story (e.g., 'No items yet. The grid is empty.'), not just 'No data'.",
+    "error": "High contrast Signal Red text/border. Brutal honesty in copy.",
+    "success": "Micro-interaction success state. Sonner toast with acid green accent flash."
+  },
+  "motion": {
+    "interactions": "Hover states on all interactive elements (lift -translate-y-1, subtle shadow, border color darkens).",
+    "transitions": "Use specific properties (e.g., transition: transform 0.2s ease, opacity 0.2s ease). NO 'transition: all'."
+  },
+  "accessibility": {
+    "contrast": "Minimum 4.5:1 for body, 3:1 for large text. Ensure APCA compliance.",
+    "attributes": "All interactive and key informational elements MUST include a data-testid attribute in kebab-case (e.g., data-testid='create-item-btn')."
+  },
+  "visual_enhancers": {
+    "textures": "Subtle noise overlay (opacity 0.02) to kill digital flatness.",
+    "icons": "Phosphor Icons (@phosphor-icons/react) for dense developer/admin tools."
+  },
+  "media": {
+    "images": "No images required per problem statement (dashboard UI). Rely on typography, grid structures, and sharp color accents for visual hierarchy."
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the design guidelines provided in this JSON.",
+    "Implement light and dark theme using Tailwind config and custom CSS.",
+    "Install and use '@phosphor-icons/react' for all icons (yarn add @phosphor-icons/react).",
+    "Do NOT center align the app container (.App { text-align: center; } is BANNED).",
+    "Use 'sonner' for toast notifications (success/error states).",
+    "Use Shadcn UI components but override their styles to match the Archetype 4 rules (sharp edges, high contrast, 1px borders)."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "Do not make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "NEVER use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 for icons.",
+    "Use modern button styles (sharp/rectangular) with specific interaction animations.",
+    "Do not apply universal transition (`transition: all`). Always add transitions for specific interactive elements.",
+    "Use 'sonner' for toasts.",
+    "Examine existing components to understand the project's component patterns before creating new ones.",
+    "All interactive elements MUST have explicit hover states with text color defined (e.g., hover:bg-slate-900 hover:text-white)."
+  ]
+}

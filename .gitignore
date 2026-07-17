@@ -1,0 +1,41 @@
+# Entornos
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+.pytest_cache/
+
+# Node
+node_modules/
+/frontend/build/
+yarn-error.log
+npm-debug.log*
+
+# Editores / SO
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Otros
+*.log
+cookies.txt
+test_reports/*
+!test_reports/.gitkeep
+!test_reports/pytest/
+!test_reports/pytest/.gitkeep
+frontend/node_modules/.cache/default-development/2.pack
+.env.*
+!.env.example
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
+.gitconfig
