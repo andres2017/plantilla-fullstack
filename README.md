@@ -37,6 +37,8 @@ frontend. El resto del negocio se construye a partir de aquí.
   DECISIONS.md               # decisiones de arquitectura
   COMO-USAR-PLANTILLA.md    # flujo para arrancar un proyecto nuevo desde aquí
 /CLAUDE.md         # constitución del equipo de ingeniería (subagentes en .claude/agents/)
+/.mcp.json          # servidor MCP de Playwright (QA visual con navegador real)
+/.claude/hooks/     # hooks de protección (lint .py, bloqueo de .env, secretos)
 ```
 
 ## Cómo bautizar un proyecto nuevo (3 pasos)
@@ -121,6 +123,49 @@ Todas las respuestas (éxito y error) siguen el formato uniforme:
 ```
 
 Ver [docs/API.md](docs/API.md) para el detalle de endpoints.
+
+## Playwright MCP (QA visual con navegador real)
+
+El repo trae `.mcp.json` con el servidor MCP de [Playwright](https://github.com/microsoft/playwright-mcp),
+que le da a Claude Code control de un navegador real (navegar, hacer clic,
+llenar formularios, capturar pantallas). Lo usa el subagente `qa-lead` para
+validar los flujos críticos de UI (registro, login, CRUD) además de probar
+la API con curl.
+
+### Instalación en una máquina nueva
+
+1. **Requisito:** Node.js 18+ (ya lo necesitás para el frontend). No hay que
+   instalar nada del lado de Python ni agregarlo a `requirements.txt` —
+   `npx` lo descarga solo.
+2. **Primer uso:** al abrir este proyecto, Claude Code detecta `.mcp.json`
+   y pregunta si querés habilitar el servidor `playwright`. Aceptá una vez
+   (o corré `/mcp` para revisarlo/habilitarlo a mano).
+3. **Navegadores de Playwright:** la primera vez que se use, `npx -y
+   @playwright/mcp@latest` puede necesitar los binarios del navegador. Si
+   falla por eso, instalalos una vez con:
+   ```bash
+   npx -y playwright install chromium
+   ```
+4. **Evidencia:** las capturas de las pasadas de QA visual quedan en
+   `test_reports/qa-visual/`.
+
+Si agregaste `.mcp.json` o `.claude/settings.json` recién (o los editó
+Claude Code en la misma sesión), hace falta correr `/hooks` y/o `/mcp` una
+vez (o reiniciar Claude Code) para que los recoja — el watcher de config
+sólo observa lo que ya existía al arrancar la sesión.
+
+## Hooks de protección automática
+
+Definidos en `.claude/settings.json` (versionado, aplica a todo el equipo)
+y `.claude/hooks/*.py`:
+
+| Hook | Evento | Qué hace |
+|---|---|---|
+| `block_env_edit.py` | `PreToolUse` en Edit/Write | Bloquea ediciones a cualquier `.env` real; sólo `.env.example` es editable desde Claude Code. |
+| `lint_python.py` | `PostToolUse` en Edit/Write | Tras editar un `.py`, corre `ruff check` (usa el venv de `backend/`) e informa hallazgos. No bloquea, es informativo. |
+| `check_secrets.py` | `PreToolUse` en Bash, sólo si el comando incluye `git commit` | Escanea el diff staged de `.py/.js/.jsx/.ts/.tsx` buscando patrones `api_key`/`secret`/`password`/`token` con valor literal, y bloquea el commit si encuentra alguno. No revisa `.md`/docs/`.env.example` (ahí se documentan credenciales de ejemplo a propósito). |
+
+`ruff` es requisito para el hook de lint: ya está en `backend/requirements.txt`.
 
 ## Cómo agregar tu primera funcionalidad real
 
