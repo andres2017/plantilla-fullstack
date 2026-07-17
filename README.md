@@ -167,6 +167,19 @@ y `.claude/hooks/*.py`:
 
 `ruff` es requisito para el hook de lint: ya está en `backend/requirements.txt`.
 
+## Comandos slash de la fábrica
+
+Definidos en `.claude/commands/`, orquestan a los subagentes de `.claude/agents/`
+siguiendo las fases y compuertas de `CLAUDE.md`. Escribí `/` en Claude Code
+para verlos en el menú.
+
+| Comando | Qué hace | Ejemplo |
+|---|---|---|
+| `/nueva-feature <descripción>` | Flujo completo de una funcionalidad: `arquitecto` diseña y **espera tu aprobación** → `backend-senior` + `frontend-senior` implementan → `qa-lead` prueba (API + navegador, con capturas) → `auditor-seguridad` revisa → resumen final con evidencia. | `/nueva-feature Historial de auditoría: cada cambio de estado de un item debe quedar registrado con quién y cuándo` |
+| `/auditoria` | `auditor-seguridad` corre su checklist OWASP completo sobre todo el proyecto (no solo el último diff) y entrega hallazgos por severidad con `archivo:línea` y corrección propuesta. | `/auditoria` |
+| `/qa <flujo>` | `qa-lead` prueba ese flujo puntual de punta a punta en navegador real, con capturas y veredicto explícito. | `/qa login con usuario admin y con usuario sin permisos` |
+| `/entregar` | Checklist de pre-release: tests completos, auditoría sin vetos, README y `.env.example` al día, y commit final (pide confirmación antes de pushear). | `/entregar` |
+
 ## Cómo agregar tu primera funcionalidad real
 
 Ver [docs/COMO-USAR-PLANTILLA.md](docs/COMO-USAR-PLANTILLA.md) — resume el
