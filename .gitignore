@@ -41,3 +41,9 @@ credentials.json
 *.key
 .credentials
 .gitconfig
+
+# Firma de release Android (NUNCA versionar el keystore ni sus claves)
+*.jks
+*.keystore
+frontend/android/keystore.properties
+frontend/android/**/keystore.properties

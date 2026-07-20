@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@capacitor/android": "7.6.8",
+    "@capacitor/core": "7.6.8",
     "@hookform/resolvers": "5.0.1",
     "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-accordion": "1.2.8",
@@ -64,7 +66,9 @@
   "scripts": {
     "start": "craco start",
     "build": "craco build",
-    "test": "craco test"
+    "test": "craco test",
+    "cap:sync": "cap sync",
+    "build:mobile": "craco build && cap sync"
   },
   "browserslist": {
     "production": [
@@ -80,6 +84,7 @@
   },
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "7.21.11",
+    "@capacitor/cli": "7.6.8",
     "@craco/craco": "7.1.0",
     "@emergentbase/visual-edits": "https://assets.emergent.sh/npm/emergentbase-visual-edits-1.0.13.tgz",
     "@eslint/js": "9.23.0",
