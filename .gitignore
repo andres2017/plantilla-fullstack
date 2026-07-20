@@ -32,6 +32,9 @@ test_reports/*
 !test_reports/pytest/.gitkeep
 !test_reports/qa-visual/
 !test_reports/qa-visual/*.png
+!test_reports/playwright/
+test_reports/playwright/*
+!test_reports/playwright/.gitkeep
 frontend/node_modules/.cache/default-development/2.pack
 .env.*
 !.env.example
