@@ -53,6 +53,9 @@ frontend. El resto del negocio se construye a partir de aquí.
    ya bautizado (ver "Instalación local" abajo para levantar y confirmar que
    arranca antes de commitear).
 
+Si además vas a empaquetar la app como Android (APK/AAB), hay un cuarto paso
+específico (cambiar el `applicationId` placeholder) — ver `docs/ANDROID.md`.
+
 ## Instalación local
 
 ### Requisitos
@@ -93,6 +96,9 @@ App disponible en `http://localhost:3000`.
 | `MONGO_URL` | Cadena de conexión a MongoDB | `mongodb://localhost:27017` |
 | `DB_NAME` | Nombre de la base de datos | `miapp_db` |
 | `CORS_ORIGINS` | Orígenes permitidos (separados por coma) | `http://localhost:3000` |
+| `CORS_ORIGIN_REGEX` | Opcional: regex de orígenes (previews con URL dinámica). Anclar siempre al dominio propio | _(vacío)_ |
+| `COOKIE_SECURE` | Cookies solo por HTTPS. `true` obligatorio en producción cross-domain | `false` |
+| `COOKIE_SAMESITE` | `lax` en local; `none` si frontend/backend quedan en dominios distintos (exige `COOKIE_SECURE=true`) | `lax` |
 | `JWT_SECRET` | Secreto para firmar JWT (`openssl rand -hex 32`) | `8f4b2e...` |
 | `ADMIN_EMAIL` | Email del admin semilla | `admin@example.com` |
 | `ADMIN_PASSWORD` | Contraseña del admin semilla | `Admin123!` |

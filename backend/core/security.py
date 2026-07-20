@@ -6,7 +6,10 @@ import jwt
 from bson import ObjectId
 from fastapi import HTTPException, Request, Response, Depends
 
-from .config import JWT_SECRET, JWT_ALGORITHM, ACCESS_TOKEN_MINUTES, REFRESH_TOKEN_DAYS
+from .config import (
+    JWT_SECRET, JWT_ALGORITHM, ACCESS_TOKEN_MINUTES, REFRESH_TOKEN_DAYS,
+    COOKIE_SECURE, COOKIE_SAMESITE,
+)
 from .database import db
 
 
@@ -49,10 +52,10 @@ def decode_token(token: str, expected_type: str) -> dict:
 
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str):
-    response.set_cookie("access_token", access_token, httponly=True, secure=False,
-                        samesite="lax", max_age=ACCESS_TOKEN_MINUTES * 60, path="/")
-    response.set_cookie("refresh_token", refresh_token, httponly=True, secure=False,
-                        samesite="lax", max_age=REFRESH_TOKEN_DAYS * 86400, path="/")
+    response.set_cookie("access_token", access_token, httponly=True, secure=COOKIE_SECURE,
+                        samesite=COOKIE_SAMESITE, max_age=ACCESS_TOKEN_MINUTES * 60, path="/")
+    response.set_cookie("refresh_token", refresh_token, httponly=True, secure=COOKIE_SECURE,
+                        samesite=COOKIE_SAMESITE, max_age=REFRESH_TOKEN_DAYS * 86400, path="/")
 
 
 def clear_auth_cookies(response: Response):

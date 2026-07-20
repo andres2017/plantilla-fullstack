@@ -11,7 +11,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
-from core.config import APP_NAME, CORS_ORIGINS, ADMIN_EMAIL, ADMIN_PASSWORD, USER_EMAIL, USER_PASSWORD
+from core.config import (
+    APP_NAME, CORS_ORIGINS, CORS_ORIGIN_REGEX, COOKIE_SECURE,
+    ADMIN_EMAIL, ADMIN_PASSWORD, USER_EMAIL, USER_PASSWORD,
+)
 from core.database import client, create_indexes, db
 from core.responses import error_response, success_response
 from core.security import hash_password, verify_password
@@ -64,6 +67,20 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(status_code=422, content=error_response(messages))
 
 
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    if request.url.path.startswith("/api/auth"):
+        response.headers["Cache-Control"] = "no-store"
+    if COOKIE_SECURE:
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    return response
+
+
 app.include_router(auth.router, prefix="/api")
 # Plantilla de referencia: duplica routers/items.py -> services -> repositories -> models
 # para cada nueva entidad de negocio. Ver docs/COMO-USAR-PLANTILLA.md.
@@ -78,6 +95,7 @@ async def health():
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
+    allow_origin_regex=CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

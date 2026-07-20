@@ -11,6 +11,9 @@ async def create_indexes():
     await db.users.create_index("email", unique=True)
     await db.refresh_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.login_attempts.create_index("identifier")
+    await db.login_attempts.create_index("created_at", expireAfterSeconds=3600)
+    await db.rate_limit_events.create_index("identifier")
+    await db.rate_limit_events.create_index("created_at", expireAfterSeconds=3600)
 
     # Entidad de ejemplo "items" — agrega aqui los indices de tus propias
     # entidades siguiendo el mismo patron (campo de filtro/orden frecuente).

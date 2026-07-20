@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
+from core.rate_limit import rate_limiter
 from core.responses import success_response
 from core.security import get_current_user, set_auth_cookies, clear_auth_cookies
 from models.user import UserRegister, UserLogin
@@ -8,7 +9,10 @@ from services import auth_service
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", status_code=201)
+_register_rate_limit = Depends(rate_limiter("register", max_attempts=5, window_minutes=15))
+
+
+@router.post("/register", status_code=201, dependencies=[_register_rate_limit])
 async def register(data: UserRegister, response: Response):
     user, access, refresh = await auth_service.register(data)
     set_auth_cookies(response, access, refresh)
