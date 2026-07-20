@@ -32,10 +32,12 @@ Flujos críticos mínimos a cubrir en cada pase:
    los controles de admin (botón "Nuevo item", menú de acciones).
 
 Para cada paso relevante (sobre todo el resultado final de cada flujo, y
-cualquier error), tomá una captura con `browser_take_screenshot` y guardala
-en `test_reports/` con un nombre descriptivo y fecha, ej.:
-`test_reports/qa-visual/2026-07-17_login-ok.png`,
-`test_reports/qa-visual/2026-07-17_items-crud-create.png`. Documentá en tu
-reporte qué captura corresponde a qué paso del plan.
+cualquier error), tomá una captura con `browser_take_screenshot`. Se guardan
+solas en `test_reports/playwright/` (configurado en `--output-dir` de
+`.mcp.json`, carpeta gitignored salvo el `.gitkeep`) — no hace falta pasar
+ruta manualmente, pero sí usá un nombre descriptivo y numerado, ej.:
+`01_login_inicial.png`, `02_items_crud_create.png`. Documentá en tu reporte
+qué captura corresponde a qué paso del plan. Usá `browser_snapshot` para
+confirmar textos/estados de la página sin depender solo de la imagen.
 
 Veredicto final siempre explícito: APROBADO o RECHAZADO con lista de bloqueantes.

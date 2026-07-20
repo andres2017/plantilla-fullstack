@@ -1,39 +1,25 @@
 {
   "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          { "type": "command", "command": "bash .claude/hooks/lint-python.sh", "timeout": 30 },
+          { "type": "command", "command": "bash .claude/hooks/lint-frontend.sh", "timeout": 30 }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Write|Edit",
         "hooks": [
-          {
-            "type": "command",
-            "command": "python .claude/hooks/block_env_edit.py",
-            "timeout": 10,
-            "statusMessage": "Verificando que no sea un .env protegido..."
-          }
+          { "type": "command", "command": "bash .claude/hooks/block-env-edit.sh", "timeout": 10 }
         ]
       },
       {
         "matcher": "Bash",
         "hooks": [
-          {
-            "type": "command",
-            "command": "python .claude/hooks/check_secrets.py",
-            "timeout": 20,
-            "statusMessage": "Buscando secretos hardcodeados antes del commit..."
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python .claude/hooks/lint_python.py",
-            "timeout": 25,
-            "statusMessage": "Linteando .py con ruff..."
-          }
+          { "type": "command", "command": "bash .claude/hooks/check-secrets.sh", "if": "Bash(git commit*)", "timeout": 15 }
         ]
       }
     ]
