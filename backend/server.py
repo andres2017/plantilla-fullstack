@@ -18,6 +18,7 @@ from core.config import (
 from core.database import client, create_indexes, db
 from core.responses import error_response, success_response
 from core.security import hash_password, verify_password
+from payments.config import PAYMENTS_ENABLED
 from routers import auth, items
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -47,6 +48,9 @@ async def seed_users():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_indexes()
+    if PAYMENTS_ENABLED:
+        from payments.indexes import create_payment_indexes
+        await create_payment_indexes()
     await seed_users()
     yield
     client.close()
@@ -85,6 +89,26 @@ app.include_router(auth.router, prefix="/api")
 # Plantilla de referencia: duplica routers/items.py -> services -> repositories -> models
 # para cada nueva entidad de negocio. Ver docs/COMO-USAR-PLANTILLA.md.
 app.include_router(items.router, prefix="/api")
+
+if PAYMENTS_ENABLED:
+    # Modulo opcional (ver docs/PAGOS.md) -- import diferido a proposito:
+    # si el flag esta apagado, nunca se instancia el cliente del proveedor
+    # ni se registra el router/manejador de excepciones.
+    from payments.config import validate_payments_config
+    from payments.errors import PaymentHTTPException, payment_error_response
+    from payments.routers.payments import router as payments_router
+
+    # Fail-fast: si PAYMENTS_ENABLED=true pero faltan credenciales de Wompi,
+    # la app NO debe arrancar -- arrancar de todos modos dejaria la
+    # verificacion de firma del webhook en modo fail-open (ver
+    # providers/wompi.py, ambos con fail-closed explicito como segunda capa).
+    validate_payments_config()
+
+    @app.exception_handler(PaymentHTTPException)
+    async def payment_exception_handler(request: Request, exc: PaymentHTTPException):
+        return JSONResponse(status_code=exc.status_code, content=payment_error_response(exc.code, exc.detail))
+
+    app.include_router(payments_router, prefix="/api")
 
 
 @app.get("/api/health")
