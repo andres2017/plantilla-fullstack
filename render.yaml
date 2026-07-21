@@ -1,0 +1,51 @@
+previews:
+  generation: automatic
+
+services:
+  - type: web
+    name: miapp-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      # Base de datos: MongoDB no es nativo de Render, usa un cluster gratis
+      # de MongoDB Atlas (M0) y pega su connection string aqui manualmente
+      # (Render Dashboard -> el servicio -> Environment). Nunca en el repo.
+      - key: MONGO_URL
+        sync: false
+      - key: DB_NAME
+        value: miapp
+        previewValue: miapp_preview
+      - key: CORS_ORIGINS
+        sync: false
+      # PLANTILLA: esta plantilla no tiene deploy propio, este valor queda
+      # comentado a proposito. Cuando un proyecto nazca de aca y despliegue
+      # de verdad, anclarlo al proyecto/team real de Vercel, ej. (caso real
+      # verificado en produccion en otra app derivada de esta plantilla):
+      # 'https://code-key-seven\.vercel\.app$|^https://code-key-[a-zA-Z0-9-]+-andres2017s-projects\.vercel\.app$'
+      # NUNCA 'https://.*\.vercel\.app' a secas: eso acepta el subdominio de
+      # CUALQUIER proyecto de Vercel de CUALQUIER persona, lo que con
+      # SameSite=none (abajo) abre CSRF real. Ver docs/CI-CD.md.
+      # - key: CORS_ORIGIN_REGEX
+      #   value: 'https://mi-app(-git-[a-z0-9-]+)?-mi-team\.vercel\.app$'
+      # Backend y frontend quedan en dominios distintos (Render + Vercel): sin
+      # esto el navegador no manda las cookies de sesion en llamadas cross-site
+      # y el login se ve "roto" en producción aunque el backend responda bien.
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: none
+      # Se genera solo, distinto en cada preview: nunca compartas el secreto de produccion.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        value: admin@example.com
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: USER_EMAIL
+        value: usuario@example.com
+      - key: USER_PASSWORD
+        sync: false

@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (lint + tests)
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand({ping: 1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      APP_NAME: "MiApp CI"
+      MONGO_URL: mongodb://localhost:27017
+      DB_NAME: miapp_ci
+      CORS_ORIGINS: http://localhost:3000
+      JWT_SECRET: ci-test-secret-nunca-usar-en-produccion
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: Admin123!
+      USER_EMAIL: usuario@example.com
+      USER_PASSWORD: Usuario123!
+      REACT_APP_BACKEND_URL: http://localhost:8000
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Levantar backend
+        run: |
+          nohup python -m uvicorn server:app --host 0.0.0.0 --port 8000 > uvicorn.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/api/health > /dev/null; then
+              echo "Backend arriba tras ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "El backend no respondio a tiempo:"
+          cat uvicorn.log
+          exit 1
+
+      - name: Tests (pytest)
+        run: pytest
+
+      - name: Logs del backend si algo fallo
+        if: failure()
+        run: cat uvicorn.log || true
+
+  frontend:
+    name: Frontend (build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Instalar dependencias
+        run: yarn install --frozen-lockfile
+
+      - name: Build
+        run: yarn build
+
+  audit-deps:
+    name: Auditoría de dependencias (falla solo en HIGH/CRITICAL)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: pip-audit (backend)
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt pip-audit cvss
+          pip-audit -r requirements.txt --format json > pip-audit-report.json || true
+          python scripts/check_pip_audit_severity.py pip-audit-report.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: yarn audit (frontend)
+        working-directory: frontend
+        run: |
+          yarn install --frozen-lockfile
+          yarn audit --json > yarn-audit-report.json || true
+          node scripts/check-audit-severity.js yarn-audit-report.json

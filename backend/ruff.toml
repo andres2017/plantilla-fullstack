@@ -1,0 +1,9 @@
+# Sin este archivo, `ruff check .` corria con defaults puros (sin exclusiones
+# documentadas) y fallaba en CI por E402 en server.py -- ver excepcion abajo.
+
+[lint.per-file-ignores]
+# server.py necesita `load_dotenv()` ANTES de importar `core.config` (que lee
+# variables de entorno con os.environ[...] al nivel de import) -- es el mismo
+# patron ya usado en toda la plantilla, no un descuido. E402 (import no al
+# tope del archivo) es un falso positivo esperado para este archivo puntual.
+"server.py" = ["E402"]
