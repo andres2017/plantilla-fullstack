@@ -1,8 +1,6 @@
-# Worker de builds (v1 stub).
-# Toma builds en estado "queued", simula progreso con eventos, genera un zip
-# de ejemplo y marca el build como completed/failed. Sirve para probar toda
-# la UI (SSE, historial, presupuesto, cancel) sin Claude Agent SDK todavia.
-# Cuando se implemente el Agent real, se reemplaza solo la funcion run_stub_build.
+# Worker de builds.
+# - Con ANTHROPIC_API_KEY → Claude Agent SDK real (agent_runner.py)
+# - Sin clave → stub simulado (para probar UI sin gastar tokens)
 
 from __future__ import annotations
 
@@ -13,12 +11,15 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from builds.config import BUILDS_WORK_ROOT, BUILDS_PER_BUILD_CAP_USD
+from builds.config import (
+    BUILDS_WORK_ROOT,
+    BUILDS_PER_BUILD_CAP_USD,
+    agent_mode_enabled,
+)
 from builds.repositories import build_repository as repo
 
 logger = logging.getLogger("builds.worker")
 
-# Registro en memoria de colas SSE por build_id: lista de asyncio.Queue
 _sse_subscribers: dict[str, list[asyncio.Queue]] = {}
 _worker_task: asyncio.Task | None = None
 _stop_event: asyncio.Event | None = None
@@ -43,12 +44,17 @@ def unsubscribe(build_id: str, q: asyncio.Queue) -> None:
 
 
 async def publish(build_id: str, event: str, data: dict) -> None:
-    """Envia un evento a todos los suscriptores SSE del build."""
     for q in list(_sse_subscribers.get(build_id, [])):
         try:
             q.put_nowait({"event": event, "data": data})
         except asyncio.QueueFull:
             pass
+
+
+async def _emit_progress(build_id: str, message: str) -> None:
+    ts = datetime.now(timezone.utc).isoformat()
+    await repo.append_event(build_id, f"[{ts}] {message}")
+    await publish(build_id, "progress", {"ts": ts, "message": message})
 
 
 async def _next_queued_build() -> dict | None:
@@ -57,68 +63,55 @@ async def _next_queued_build() -> dict | None:
 
 
 async def run_stub_build(build: dict) -> None:
-    """Simula un build realista: progreso por pasos, costo y zip de ejemplo."""
+    """Simula un build (sin API key)."""
     build_id = build["id"]
     now = datetime.now(timezone.utc)
 
     await repo.update_build(build_id, status="running", started_at=now)
-    await repo.append_event(build_id, f"[{now.isoformat()}] Worker tomo el build")
     await publish(build_id, "status", {"status": "running", "queue_position": None})
-    await publish(build_id, "progress", {"ts": now.isoformat(), "message": "Iniciando working dir..."})
+    await _emit_progress(build_id, "Iniciando working dir (stub)…")
 
     work_root = Path(BUILDS_WORK_ROOT) / build_id
     work_root.mkdir(parents=True, exist_ok=True)
     await repo.update_build(build_id, work_dir=str(work_root))
 
     steps = [
-        (1.0, "Copiando plantilla al working dir..."),
-        (1.2, "Analizando prompt del usuario..."),
-        (1.5, "Planificando cambios en backend y frontend..."),
-        (2.0, "Aplicando ediciones (stub)..."),
-        (1.0, "Escaneando secretos pre-zip..."),
-        (0.8, "Generando archivo .zip..."),
+        (1.0, "Copiando plantilla al working dir…"),
+        (1.2, "Analizando prompt del usuario…"),
+        (1.5, "Planificando cambios…"),
+        (2.0, "Aplicando ediciones (stub)…"),
+        (1.0, "Escaneando secretos pre-zip…"),
+        (0.8, "Generando archivo .zip…"),
     ]
 
     for delay, message in steps:
-        # Permitir cancelacion entre pasos
         current = await repo.get_build(build_id)
         if current and current["status"] == "cancelled":
-            await publish(build_id, "progress", {
-                "ts": datetime.now(timezone.utc).isoformat(),
-                "message": "Build cancelado por el usuario",
-            })
+            await _emit_progress(build_id, "Build cancelado por el usuario")
             await publish(build_id, "done", {
-                "status": "cancelled",
-                "cost_real_usd": 0.0,
-                "download_url": None,
+                "status": "cancelled", "cost_real_usd": 0.0, "download_url": None,
             })
             return
 
         await asyncio.sleep(delay)
-        ts = datetime.now(timezone.utc).isoformat()
-        await repo.append_event(build_id, f"[{ts}] {message}")
-        await publish(build_id, "progress", {"ts": ts, "message": message})
+        await _emit_progress(build_id, message)
 
-    # Generar zip de ejemplo
     zip_path = work_root / f"build-{build_id}.zip"
     readme = work_root / "README-FABRICA.txt"
     readme.write_text(
-        f"Fábrica Cyberandres — build stub\n"
+        f"Fabrica Cyberandres — build STUB\n"
         f"Build ID: {build_id}\n"
         f"Prompt: {build.get('prompt', '')[:500]}\n"
-        f"Generado: {datetime.now(timezone.utc).isoformat()}\n"
-        f"\nEste es un ZIP de ejemplo del worker stub.\n"
-        f"Cuando se active el Claude Agent SDK real, aqui ira el codigo generado.\n",
+        f"\nSin ANTHROPIC_API_KEY: este zip es de ejemplo.\n",
         encoding="utf-8",
     )
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.write(readme, arcname="README-FABRICA.txt")
 
-    # Costo real simulado (un poco menor que el estimado)
     estimated = float(build.get("estimated_cost_usd") or 0.1)
     actual = round(min(estimated * 0.85, BUILDS_PER_BUILD_CAP_USD), 4)
-
     finished = datetime.now(timezone.utc)
+
     await repo.update_build(
         build_id,
         status="completed",
@@ -126,12 +119,7 @@ async def run_stub_build(build: dict) -> None:
         finished_at=finished,
         zip_path=str(zip_path),
     )
-    await repo.append_event(build_id, f"[{finished.isoformat()}] Build completado (stub). Costo: ${actual}")
-
-    await publish(build_id, "progress", {
-        "ts": finished.isoformat(),
-        "message": f"Build completado. Costo real: ${actual}",
-    })
+    await _emit_progress(build_id, f"Build completado (stub). Costo: ${actual}")
     await publish(build_id, "done", {
         "status": "completed",
         "cost_real_usd": actual,
@@ -140,8 +128,68 @@ async def run_stub_build(build: dict) -> None:
     logger.info("Build %s completado (stub), costo=$%.4f", build_id, actual)
 
 
+async def run_agent_build(build: dict) -> None:
+    """Build real con Claude Agent SDK."""
+    from builds.services.agent_runner import run_agent_build as _run
+
+    build_id = build["id"]
+    now = datetime.now(timezone.utc)
+
+    await repo.update_build(build_id, status="running", started_at=now)
+    await publish(build_id, "status", {"status": "running", "queue_position": None})
+    await _emit_progress(build_id, "Worker tomó el build — modo AGENT SDK")
+
+    async def on_progress(msg: str):
+        await _emit_progress(build_id, msg)
+
+    async def is_cancelled() -> bool:
+        current = await repo.get_build(build_id)
+        return bool(current and current["status"] == "cancelled")
+
+    try:
+        result = await _run(
+            build_id=build_id,
+            prompt=build.get("prompt") or "",
+            on_progress=on_progress,
+            is_cancelled=is_cancelled,
+        )
+    except RuntimeError as exc:
+        if str(exc) == "CANCELLED":
+            await _emit_progress(build_id, "Build cancelado")
+            await publish(build_id, "done", {
+                "status": "cancelled", "cost_real_usd": 0.0, "download_url": None,
+            })
+            return
+        raise
+
+    finished = datetime.now(timezone.utc)
+    actual = float(result["actual_cost_usd"])
+    await repo.update_build(
+        build_id,
+        status="completed",
+        actual_cost_usd=actual,
+        finished_at=finished,
+        zip_path=result["zip_path"],
+        work_dir=result["work_dir"],
+    )
+    await publish(build_id, "done", {
+        "status": "completed",
+        "cost_real_usd": actual,
+        "download_url": f"/api/builds/{build_id}/download",
+    })
+    logger.info("Build %s completado (agent), costo=$%.4f", build_id, actual)
+
+
+async def _process_build(build: dict) -> None:
+    if agent_mode_enabled():
+        await run_agent_build(build)
+    else:
+        await run_stub_build(build)
+
+
 async def _worker_loop(stop: asyncio.Event) -> None:
-    logger.info("Worker de builds iniciado (modo stub)")
+    mode = "AGENT SDK" if agent_mode_enabled() else "STUB"
+    logger.info("Worker de builds iniciado (modo %s)", mode)
     while not stop.is_set():
         try:
             build = await _next_queued_build()
@@ -157,27 +205,34 @@ async def _worker_loop(stop: asyncio.Event) -> None:
                 continue
 
             try:
-                # Re-verificar que sigue queued (otra instancia pudo tomarlo)
                 current = await repo.get_build(build_id)
                 if not current or current["status"] != "queued":
                     continue
-                await run_stub_build(current)
+                await _process_build(current)
             except Exception as exc:
                 logger.exception("Error en build %s: %s", build_id, exc)
                 now = datetime.now(timezone.utc)
-                await repo.update_build(
-                    build_id,
-                    status="failed",
-                    error_code="BUILD_009_WORKER_ERROR",
-                    error_message=str(exc)[:500],
-                    finished_at=now,
-                    actual_cost_usd=0.0,
-                )
-                await publish(build_id, "done", {
-                    "status": "failed",
-                    "cost_real_usd": 0.0,
-                    "download_url": None,
-                })
+                # Si ya fue cancelado, no pisar
+                current = await repo.get_build(build_id)
+                if current and current["status"] == "cancelled":
+                    await publish(build_id, "done", {
+                        "status": "cancelled", "cost_real_usd": 0.0, "download_url": None,
+                    })
+                else:
+                    msg = str(exc)[:500]
+                    code = "BUILD_001_TIMEOUT" if "TIMEOUT" in msg.upper() else "BUILD_009_WORKER_ERROR"
+                    await repo.update_build(
+                        build_id,
+                        status="failed",
+                        error_code=code,
+                        error_message=msg,
+                        finished_at=now,
+                        actual_cost_usd=0.0,
+                    )
+                    await _emit_progress(build_id, f"Error: {msg}")
+                    await publish(build_id, "done", {
+                        "status": "failed", "cost_real_usd": 0.0, "download_url": None,
+                    })
             finally:
                 await repo.release_lock()
         except asyncio.CancelledError:
