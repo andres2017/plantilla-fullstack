@@ -324,6 +324,49 @@ como tarea propia si tu dominio termina con muchas comparaciones de fecha.
 
 ---
 
+## 2026-07-23 — Fix: builds fallaban en Windows con "Failed to start Claude Code: " (mensaje vacío)
+
+**Contexto:** los 2 primeros builds en modo Agent SDK real fallaron con
+`error_code=BUILD_009_WORKER_ERROR` y `error_message="Failed to start Claude
+Code: "` (sin texto tras los dos puntos). Se descartó SDK faltante, permisos
+de `work_dir` y error de la API de Anthropic (la clave y el binario `claude`
+sí estaban disponibles; la plantilla se copió sin error).
+
+**Causa raíz:** un `str(Exception)` vacío es la firma de `NotImplementedError`
+sin argumentos — exactamente lo que `asyncio` lanza en Windows al intentar
+spawnear un subproceso bajo `SelectorEventLoop` (solo `ProactorEventLoop`
+soporta subprocesos ahí). `uvicorn --reload` en Windows fuerza
+`SelectorEventLoop` en el proceso real donde corre la app
+(`use_subprocess=True` cuando hay `--reload`, ver `uvicorn/config.py` y
+`uvicorn/loops/asyncio.py`). El Agent SDK necesita spawnear el CLI `claude`
+como subproceso, y ese spawn es el que fallaba.
+
+**Guía operativa (arranque, scripts, verificación):** `docs/BUILDS.md`.
+
+**Fix aplicado:**
+1. `builds/services/agent_runner.py`: chequeo defensivo al inicio de
+   `run_agent_build` — si `sys.platform == "win32"` y el loop activo no es
+   `ProactorEventLoop`, falla rápido con un mensaje accionable en vez de
+   dejar que el SDK genere el mensaje vacío.
+2. `builds/services/worker.py`: nuevo `error_code=BUILD_011_WINDOWS_EVENTLOOP`
+   para este caso (mismo patrón que la detección existente de `TIMEOUT`).
+3. `BuildHistoryTable.jsx`: ahora muestra `error_code`/`error_message` en un
+   tooltip sobre el badge cuando `status=failed` (antes no se veía el motivo
+   en la UI).
+
+**Cómo evitarlo al probar en modo agente en Windows:** corre uvicorn con
+`--loop none` (usa el `ProactorEventLoop` por defecto de Windows en vez del
+que fuerza `--reload`), o quita `--reload` mientras pruebas builds reales.
+En modo STUB (sin `ANTHROPIC_API_KEY`) no aplica: el stub no spawnea
+subprocesos.
+
+**Alternativa descartada:** mover el spawn del Agent SDK a un thread con su
+propio `ProactorEventLoop` (robusto ante cualquier configuración de uvicorn,
+pero requiere puentear callbacks async entre loops — más riesgo/código del
+justificado para un fix de compatibilidad de Windows en dev).
+
+---
+
 *Registra aquí cada decisión de arquitectura nueva: contexto, alternativas
 descartadas, razón (ver CLAUDE.md, sección "Estándares transversales" y
 subagente `arquitecto`).*

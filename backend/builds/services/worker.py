@@ -220,7 +220,12 @@ async def _worker_loop(stop: asyncio.Event) -> None:
                     })
                 else:
                     msg = str(exc)[:500]
-                    code = "BUILD_001_TIMEOUT" if "TIMEOUT" in msg.upper() else "BUILD_009_WORKER_ERROR"
+                    if "TIMEOUT" in msg.upper():
+                        code = "BUILD_001_TIMEOUT"
+                    elif "WINDOWS_EVENTLOOP" in msg.upper():
+                        code = "BUILD_011_WINDOWS_EVENTLOOP"
+                    else:
+                        code = "BUILD_009_WORKER_ERROR"
                     await repo.update_build(
                         build_id,
                         status="failed",

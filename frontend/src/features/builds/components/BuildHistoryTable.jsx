@@ -109,7 +109,24 @@ export const BuildHistoryTable = ({ refreshKey = 0 }) => {
                       </Tooltip>
                     </TableCell>
                     <TableCell>
-                      <BuildStatusBadge status={build.status} />
+                      {build.status === "failed" && build.error_message ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex cursor-help items-center gap-1.5" tabIndex={0}>
+                              <BuildStatusBadge status={build.status} />
+                              <WarningCircle size={14} className="text-[#FF2A2A]" />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-sm whitespace-pre-wrap">
+                            {build.error_code && (
+                              <p className="font-mono text-[10px] text-muted-foreground">{build.error_code}</p>
+                            )}
+                            <p>{build.error_message}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <BuildStatusBadge status={build.status} />
+                      )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
                       {fmtUsd(build.estimated_cost_usd)} / {fmtUsd(build.cost_real_usd)}

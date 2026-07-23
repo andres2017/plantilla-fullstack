@@ -12,6 +12,7 @@ import asyncio
 import logging
 import re
 import shutil
+import sys
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -169,6 +170,19 @@ async def run_agent_build(
     """
     if not ANTHROPIC_API_KEY:
         raise RuntimeError("ANTHROPIC_API_KEY requerida para el Agent SDK real")
+
+    if sys.platform == "win32" and not isinstance(asyncio.get_event_loop(), asyncio.ProactorEventLoop):
+        # uvicorn --reload en Windows fuerza SelectorEventLoop en el proceso hijo
+        # real (uvicorn/config.py: use_subprocess=True con --reload), y ese loop
+        # no soporta subprocesos: el Agent SDK falla al spawnear el CLI `claude`
+        # con un NotImplementedError sin mensaje ("Failed to start Claude Code: ").
+        raise RuntimeError(
+            "WINDOWS_EVENTLOOP: el servidor corre bajo SelectorEventLoop, que no "
+            "soporta subprocesos en Windows (requerido para lanzar el CLI de Claude "
+            "Code). Causa tipica: uvicorn con --reload en Windows. Solucion: corre "
+            "uvicorn con '--loop none' (usa el ProactorEventLoop por defecto), o "
+            "quita --reload al probar builds en modo agente."
+        )
 
     work_dir = Path(BUILDS_WORK_ROOT) / build_id
     zip_path = work_dir / f"build-{build_id}.zip"
