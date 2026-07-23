@@ -1,7 +1,10 @@
 # Config del modulo de builds. TODO se lee con .get() (nunca os.environ[...]
 # obligatorio a nivel de import), para que un proyecto sin BUILDS_ENABLED
 # arranque exactamente igual que sin este modulo.
+import logging
 import os
+
+logger = logging.getLogger("builds.config")
 
 BUILDS_ENABLED = os.environ.get("BUILDS_ENABLED", "false").strip().lower() == "true"
 
@@ -20,7 +23,8 @@ BUILDS_PRICE_OUTPUT_PER_MTOK_USD = float(os.environ.get("BUILDS_PRICE_OUTPUT_PER
 BUILDS_ESTIMATE_SAFETY_MARGIN = float(os.environ.get("BUILDS_ESTIMATE_SAFETY_MARGIN", "1.3"))
 BUILDS_BASE_CONTEXT_TOKENS = int(os.environ.get("BUILDS_BASE_CONTEXT_TOKENS", "12000"))
 
-# API key de Anthropic (solo se valida si BUILDS_ENABLED=true)
+# API key de Anthropic. En v1 (worker stub) es opcional.
+# Cuando se active el Agent SDK real, se volvera obligatoria.
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
 # Directorio base donde se crean los working dirs de cada build
@@ -28,8 +32,9 @@ BUILDS_WORK_ROOT = os.environ.get("BUILDS_WORK_ROOT", "/tmp/builds")
 
 
 def validate_builds_config():
-    """Fail-fast, SOLO se invoca cuando BUILDS_ENABLED=true (ver server.py)."""
+    """Validacion al activar el modulo. En modo stub no exige API key."""
     if not ANTHROPIC_API_KEY:
-        raise RuntimeError(
-            "BUILDS_ENABLED=true requiere ANTHROPIC_API_KEY. Revisa backend/.env."
+        logger.warning(
+            "BUILDS_ENABLED=true sin ANTHROPIC_API_KEY — worker en modo STUB. "
+            "El Agent SDK real requerira la clave."
         )
