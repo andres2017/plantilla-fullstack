@@ -1,17 +1,21 @@
 import { Outlet, NavLink } from "react-router-dom";
-import { Cube, SignOut } from "@phosphor-icons/react";
+import { Cube, Factory, SignOut } from "@phosphor-icons/react";
 import { useAuth } from "@/features/auth/AuthContext";
 import { Button } from "@/components/ui/button";
 import { APP_NAME } from "@/config";
 
 // Agrega aqui un item por cada feature nueva (icono de @phosphor-icons/react).
 // "enabled: false" muestra un placeholder deshabilitado con badge "pronto".
+// "adminOnly: true" oculta el item por completo para roles distintos de "admin"
+// (no solo un boton individual, sino la entrada de navegacion completa).
 const navItems = [
   { to: "/items", label: "Items", icon: Cube, enabled: true },
+  { to: "/builds", label: "Builds", icon: Factory, enabled: true, adminOnly: true },
 ];
 
 export const AppLayout = () => {
   const { user, logout } = useAuth();
+  const visibleNavItems = navItems.filter((item) => !item.adminOnly || user?.role === "admin");
 
   return (
     <div className="min-h-screen bg-background">
@@ -21,7 +25,7 @@ export const AppLayout = () => {
           <span className="font-heading text-base font-black tracking-tighter">{APP_NAME}</span>
         </div>
         <nav className="flex-1 space-y-px p-3">
-          {navItems.map(({ to, label, icon: Icon, enabled }) =>
+          {visibleNavItems.map(({ to, label, icon: Icon, enabled }) =>
             enabled ? (
               <NavLink key={to} to={to} data-testid={`sidebar-link-${label.toLowerCase()}`}
                 className={({ isActive }) =>

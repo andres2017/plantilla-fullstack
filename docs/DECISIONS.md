@@ -1,5 +1,124 @@
 # Decisiones técnicas
 
+## 2026-07-23 — Diseño MISIÓN 14: Tablero de builds vía Claude Agent SDK — PROPUESTO, PENDIENTE DE APROBACIÓN DEL USUARIO
+
+**Contexto:** feature nueva para que un admin dispare, desde un dashboard,
+una edición de `plantilla-fullstack` guiada por prompt en español, ejecutada
+por el Claude Agent SDK sobre un working dir aislado, con progreso en vivo y
+descarga de `.zip`. Cada build cobra API real de Anthropic — el diseño debe
+acotar gasto ($20/día global, $0.50/build), aislar el Agent SDK del proceso
+backend (secretos, filesystem), y garantizar un solo build corriendo a la
+vez. El documento completo (arquitectura, modelos, endpoints, contratos,
+mapa de pantallas, riesgos) se entregó al usuario en la sesión de diseño;
+aquí solo el resumen decisional para memoria institucional.
+
+**Decisiones de arquitectura clave:**
+
+1. **Módulo opcional, mismo patrón que `payments`:** `backend/builds/`
+   (config.py, errors.py, indexes.py, models/, repositories/, services/,
+   routers/) gateado por `BUILDS_ENABLED` (default `false`), config leída
+   con `.get()` (nunca `os.environ[...]` obligatorio a nivel de import),
+   `validate_builds_config()` invocada solo si el flag está activo — un
+   clon de la plantilla que no usa esta feature arranca exactamente igual
+   que hoy. Alternativa descartada: meterlo directo en `routers/`/`services/`
+   genéricos — rechazada porque acopla el core de la plantilla a una
+   dependencia pesada (Agent SDK, llamadas a Anthropic) que la mayoría de
+   proyectos derivados no necesitará.
+
+2. **Formato de error propio `{code, message}`** (`BuildHTTPException`,
+   calcado de `payments/errors.py`), en vez del string plano de
+   `core/responses.py::error_response()`. Igual justificación que pagos:
+   taxonomía de códigos (`BUILD_001_TIMEOUT` … `BUILD_010_COLA_LLENA`) que
+   el frontend necesita distinguir programáticamente. Es la segunda vez que
+   se adopta este patrón — se sugiere al usuario evaluar a futuro
+   convertirlo en el estándar del proyecto (no se hace en esta misión).
+   **Ajuste requerido y detectado en esta sesión:** `frontend/src/lib/api.js
+   ::getApiError()` hoy SOLO contempla `error` como string; nunca se
+   extendió para el objeto `{code,message}` cuando se introdujo en pagos
+   (pagos aún no tiene consumo frontend en esta plantilla). `frontend-senior`
+   debe extenderlo antes de consumir estos endpoints.
+
+3. **Aislamiento del Agent SDK (decisión fija #2 del usuario):** mismo
+   proceso backend, pero `cwd` del SDK apuntando a un working dir dedicado
+   por build; `env` del subproceso es un diccionario explícito mínimo
+   (`ANTHROPIC_API_KEY` + lo estrictamente necesario), NUNCA
+   `os.environ.copy()` — así `JWT_SECRET`/`MONGO_URL`/contraseñas del
+   backend principal nunca llegan al subproceso. Copia del repo al working
+   dir con denylist explícita (`.env`, `.git/`, `node_modules`, patrones ya
+   curados en el `.gitignore` raíz) independiente del filtro de Mongo/Git.
+   `allowed_tools` restringido a `Read/Write/Edit/Glob/Grep` — **Bash
+   deshabilitado por defecto en v1** (veto a habilitarlo sin controles):
+   es el vector de mayor riesgo (fuga de `ANTHROPIC_API_KEY` vía
+   `env`/`printenv` hacia un archivo que luego se zipea y entrega al admin,
+   exfiltración de red, escape de working dir). Contención real de rutas
+   vía hook `can_use_tool`/PreToolUse con `os.path.realpath` (no confiar en
+   que `cwd` por sí solo sea una jaula). Escaneo de secretos pre-zip como
+   red de seguridad adicional. Alternativa descartada: contenedor
+   Docker/gVisor por build — más seguro en teoría, pero Render free/starter
+   no ofrece Docker-in-Docker ni sandboxing a nivel de kernel de forma
+   simple; se documenta como mejora de v2 si el uso crece.
+
+4. **Progreso en vivo: SSE, no WebSocket.** Es unidireccional
+   (servidor→cliente), corre sobre HTTP normal (sin upgrade especial en el
+   proxy de Render), `EventSource` con `withCredentials:true` reutiliza las
+   cookies httpOnly ya existentes sin inventar un esquema de auth nuevo
+   (nunca token en query string). Cancelar es una acción REST aparte
+   (`POST /builds/{id}/cancel`), no necesita canal bidireccional.
+
+5. **Concurrencia: lock atómico en Mongo (`build_locks`, doc singleton),
+   no un flag en memoria.** Un loop `asyncio` en el proceso intenta
+   reclamar el lock; si en el futuro Render escala a más de una instancia,
+   el lock sigue siendo la fuente de verdad correcta (solo una instancia
+   gana el `find_one_and_update` atómico) — se documenta como supuesto
+   operativo para `devops-release`: esta feature asume 1 instancia de
+   Render mientras esté activa; si se escala, sigue siendo correcto pero
+   menos eficiente (instancias ociosas solo pierden un ciclo de poll).
+   Recuperación ante caída/reinicio: en `lifespan`, cualquier build en
+   `running` al arrancar se marca `failed` (`BUILD_008`) y el lock se
+   libera incondicionalmente.
+
+6. **Corte de costo por build: estructural (`max_turns` + timeout duro),
+   no un interrupt exacto en tiempo real garantizado.** No hay certeza, sin
+   validarlo contra la versión real del SDK, de que el stream de mensajes
+   exponga uso de tokens incremental por turno (necesario para un corte
+   exacto a mitad de ejecución). Se documenta como riesgo con plan A
+   (interrupt en vivo si el SDK lo permite — mejora) y plan B (adoptado
+   como baseline garantizado de v1: `BUILDS_MAX_TURNS=40` +
+   `BUILDS_TIMEOUT_SECONDS=600` calibrados para que el peor caso se
+   mantenga por debajo del tope por construcción). `backend-senior` debe
+   validar esto empíricamente en FASE 2 antes de confiar en el plan A.
+
+7. **Presupuesto diario: "comprometido", no solo "gastado".** El chequeo
+   contra `BUILDS_DAILY_BUDGET_USD` (default 20) suma costo real de builds
+   terminados hoy MÁS costo estimado de los que están `queued`/`running` —
+   evita encolar de más builds que en conjunto excederían el tope aunque
+   ninguno haya corrido todavía. Un build en cola que deja de caber cuando
+   le toca correr (porque otros gastaron entre tanto) se marca `failed`
+   (`BUILD_003`) y se salta, sin bloquear el resto de la cola.
+   `BUILDS_MAX_QUEUE_DEPTH=10` como tope adicional independiente.
+
+8. **Estimación de costo previa (heurística, no exacta):** tokens de
+   contexto base de la plantilla (fijo, ~10-15k, ya que v1 solo soporta
+   `plantilla-fullstack`) + tokens del prompt + bucket de tokens de salida
+   por tamaño de prompt (pequeño/mediano/grande), con margen de seguridad
+   `BUILDS_ESTIMATE_SAFETY_MARGIN=1.3` (sesga la estimación hacia arriba a
+   propósito). Tarifas de Sonnet como variables de entorno
+   (`BUILDS_PRICE_INPUT_PER_MTOK_USD`/`BUILDS_PRICE_OUTPUT_PER_MTOK_USD`),
+   nunca constantes quemadas — para no requerir cambio de código si
+   Anthropic ajusta precios. El estimado NUNCA se confía si viene del
+   cliente: `POST /builds` recalcula server-side siempre.
+
+**Deuda técnica explícita del MVP** (no se implementa en v1, no se vende de
+más): sin almacenamiento de objetos persistente (zips en disco efímero de
+Render, TTL corto, no sobreviven redeploy); Bash deshabilitado (el agente no
+corre `npm install`/tests dentro del build); un solo template soportado;
+historial de builds compartido entre todos los admins sin aislamiento por
+usuario; sin reintento automático; sin panel para ajustar límites en
+caliente (requiere redeploy).
+
+**Estado:** diseño entregado al usuario, aún no aprobado. No se ha escrito
+ningún código de `backend/builds/` ni `frontend/src/features/builds/`.
+
 ## 2026-07-20 — Ciclo de auditoría/QA del módulo de pagos: 1 CRÍTICO + 2 ALTO encontrados y cerrados
 
 **Contexto:** primera pasada de `auditor-seguridad` y `qa-lead` (en paralelo)
