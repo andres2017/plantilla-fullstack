@@ -19,6 +19,7 @@ def _to_public(doc: dict) -> dict:
         "started_at": as_utc(doc["started_at"]) if doc.get("started_at") else None,
         "finished_at": as_utc(doc["finished_at"]) if doc.get("finished_at") else None,
         "events": doc.get("events", []),
+        "has_zip": bool(doc.get("zip_path")),
     }
 
 
@@ -51,6 +52,13 @@ async def get_build(build_id: str) -> Optional[dict]:
     return _to_public(doc) if doc else None
 
 
+async def get_build_raw(build_id: str) -> Optional[dict]:
+    """Documento completo (incluye zip_path/work_dir) para uso interno."""
+    if not ObjectId.is_valid(build_id):
+        return None
+    return await db.builds.find_one({"_id": ObjectId(build_id)})
+
+
 async def list_builds(page: int, limit: int, status: Optional[str] = None) -> Tuple[List[dict], int]:
     query = {}
     if status:
@@ -69,7 +77,7 @@ async def list_builds(page: int, limit: int, status: Optional[str] = None) -> Tu
 async def update_build(build_id: str, **fields) -> Optional[dict]:
     if not ObjectId.is_valid(build_id):
         return None
-    fields = {k: v for k, v in fields.items() if v is not None}
+    # Permitir None explicitamente en algunos campos (ej. error_code al cancelar)
     if not fields:
         return await get_build(build_id)
     await db.builds.update_one({"_id": ObjectId(build_id)}, {"$set": fields})
@@ -88,7 +96,6 @@ async def append_event(build_id: str, event: str):
 async def get_today_spent_and_committed() -> tuple[float, float]:
     """Gastado real de builds terminados hoy + estimado de queued/running."""
     today_start = datetime.combine(date.today(), datetime.min.time()).replace(tzinfo=timezone.utc)
-    # Gastado
     pipeline_spent = [
         {"$match": {
             "status": {"$in": ["completed", "failed"]},
@@ -100,7 +107,6 @@ async def get_today_spent_and_committed() -> tuple[float, float]:
     spent_cursor = await db.builds.aggregate(pipeline_spent).to_list(1)
     spent = float(spent_cursor[0]["total"]) if spent_cursor else 0.0
 
-    # Comprometido (queued + running)
     pipeline_committed = [
         {"$match": {"status": {"$in": ["queued", "running"]}}},
         {"$group": {"_id": None, "total": {"$sum": "$estimated_cost_usd"}}},
@@ -115,17 +121,37 @@ async def count_queued() -> int:
     return await db.builds.count_documents({"status": "queued"})
 
 
+async def count_queued_before(created_at) -> int:
+    """Posicion en cola: cuantos queued fueron creados antes que este."""
+    return await db.builds.count_documents({
+        "status": "queued",
+        "created_at": {"$lt": created_at},
+    })
+
+
 async def try_acquire_lock(holder: str) -> bool:
-    """Lock atómico singleton. Retorna True si se adquirió."""
+    """Lock atomico singleton. Retorna True solo si este holder lo adquirio."""
     now = datetime.now(timezone.utc)
+    # Intentar reclamar un lock libre (o crear el doc si no existe)
+    existing = await db.build_locks.find_one({"_id": "global"})
+    if existing is None:
+        try:
+            await db.build_locks.insert_one({
+                "_id": "global",
+                "locked": True,
+                "holder": holder,
+                "acquired_at": now,
+            })
+            return True
+        except Exception:
+            return False
+
+    if existing.get("locked") and existing.get("holder"):
+        return False
+
     result = await db.build_locks.find_one_and_update(
-        {"_id": "global", "$or": [
-            {"locked": False},
-            {"locked": {"$exists": False}},
-            {"holder": None},
-        ]},
+        {"_id": "global", "locked": {"$ne": True}},
         {"$set": {"locked": True, "holder": holder, "acquired_at": now}},
-        upsert=True,
         return_document=True,
     )
     return result is not None and result.get("holder") == holder
