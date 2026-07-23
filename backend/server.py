@@ -19,6 +19,7 @@ from core.database import client, create_indexes, db
 from core.responses import error_response, success_response
 from core.security import hash_password, verify_password
 from payments.config import PAYMENTS_ENABLED
+from builds.config import BUILDS_ENABLED
 from routers import auth, items
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -51,6 +52,11 @@ async def lifespan(app: FastAPI):
     if PAYMENTS_ENABLED:
         from payments.indexes import create_payment_indexes
         await create_payment_indexes()
+    if BUILDS_ENABLED:
+        from builds.indexes import create_build_indexes
+        from builds.repositories.build_repository import recover_stale_builds
+        await create_build_indexes()
+        await recover_stale_builds()
     await seed_users()
     yield
     client.close()
@@ -109,6 +115,22 @@ if PAYMENTS_ENABLED:
         return JSONResponse(status_code=exc.status_code, content=payment_error_response(exc.code, exc.detail))
 
     app.include_router(payments_router, prefix="/api")
+
+if BUILDS_ENABLED:
+    from builds.config import validate_builds_config
+    from builds.errors import BuildHTTPException, build_error_response
+    from builds.routers.builds import router as builds_router
+
+    validate_builds_config()
+
+    @app.exception_handler(BuildHTTPException)
+    async def build_exception_handler(request: Request, exc: BuildHTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=build_error_response(exc.code, exc.detail),
+        )
+
+    app.include_router(builds_router, prefix="/api")
 
 
 @app.get("/api/health")
