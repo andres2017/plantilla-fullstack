@@ -55,10 +55,16 @@ async def lifespan(app: FastAPI):
     if BUILDS_ENABLED:
         from builds.indexes import create_build_indexes
         from builds.repositories.build_repository import recover_stale_builds
+        from builds.services.worker import start_worker, stop_worker
         await create_build_indexes()
         await recover_stale_builds()
+        await start_worker()
+        logger.info("Modulo builds activo (worker stub)")
     await seed_users()
     yield
+    if BUILDS_ENABLED:
+        from builds.services.worker import stop_worker
+        await stop_worker()
     client.close()
 
 
@@ -97,17 +103,10 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(items.router, prefix="/api")
 
 if PAYMENTS_ENABLED:
-    # Modulo opcional (ver docs/PAGOS.md) -- import diferido a proposito:
-    # si el flag esta apagado, nunca se instancia el cliente del proveedor
-    # ni se registra el router/manejador de excepciones.
     from payments.config import validate_payments_config
     from payments.errors import PaymentHTTPException, payment_error_response
     from payments.routers.payments import router as payments_router
 
-    # Fail-fast: si PAYMENTS_ENABLED=true pero faltan credenciales de Wompi,
-    # la app NO debe arrancar -- arrancar de todos modos dejaria la
-    # verificacion de firma del webhook en modo fail-open (ver
-    # providers/wompi.py, ambos con fail-closed explicito como segunda capa).
     validate_payments_config()
 
     @app.exception_handler(PaymentHTTPException)
