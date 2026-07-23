@@ -23,18 +23,26 @@ BUILDS_PRICE_OUTPUT_PER_MTOK_USD = float(os.environ.get("BUILDS_PRICE_OUTPUT_PER
 BUILDS_ESTIMATE_SAFETY_MARGIN = float(os.environ.get("BUILDS_ESTIMATE_SAFETY_MARGIN", "1.3"))
 BUILDS_BASE_CONTEXT_TOKENS = int(os.environ.get("BUILDS_BASE_CONTEXT_TOKENS", "12000"))
 
-# API key de Anthropic. En v1 (worker stub) es opcional.
-# Cuando se active el Agent SDK real, se volvera obligatoria.
+# API key de Anthropic. Si esta presente → Agent SDK real; si no → worker stub.
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
 # Directorio base donde se crean los working dirs de cada build
 BUILDS_WORK_ROOT = os.environ.get("BUILDS_WORK_ROOT", "/tmp/builds")
 
+# Raiz de la plantilla a copiar. Vacio = se deduce (repo root relativo a este archivo).
+BUILDS_TEMPLATE_ROOT = os.environ.get("BUILDS_TEMPLATE_ROOT", "").strip() or None
+
+
+def agent_mode_enabled() -> bool:
+    return bool(ANTHROPIC_API_KEY)
+
 
 def validate_builds_config():
-    """Validacion al activar el modulo. En modo stub no exige API key."""
-    if not ANTHROPIC_API_KEY:
+    """Validacion al activar el modulo."""
+    if agent_mode_enabled():
+        logger.info("Builds: modo AGENT SDK real (ANTHROPIC_API_KEY presente)")
+    else:
         logger.warning(
             "BUILDS_ENABLED=true sin ANTHROPIC_API_KEY — worker en modo STUB. "
-            "El Agent SDK real requerira la clave."
+            "Agrega la clave para activar Claude Agent SDK."
         )
