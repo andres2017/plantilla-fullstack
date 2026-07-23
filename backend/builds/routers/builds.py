@@ -15,7 +15,7 @@ from builds.services import budget_service, build_service
 from builds.repositories import build_repository as repo
 from builds.services import worker
 
-router = APIRouter(prefix="/builds", tags=[["builds"]])
+router = APIRouter(prefix="/builds", tags=["builds"])
 
 _write_rate = Depends(rate_limiter("builds-write", max_attempts=20, window_minutes=1))
 
@@ -102,7 +102,6 @@ async def build_events(build_id: str, request: Request, admin: dict = Depends(re
     async def event_stream():
         q = worker.subscribe(build_id)
         try:
-            # Snapshot inicial
             queue_position = None
             if build["status"] == "queued":
                 raw = await repo.get_build_raw(build_id)
@@ -129,14 +128,12 @@ async def build_events(build_id: str, request: Request, admin: dict = Depends(re
                 yield _sse("done", done)
                 return
 
-            # Escuchar eventos en vivo hasta terminal o desconexion
             while True:
                 if await request.is_disconnected():
                     break
                 try:
                     msg = await asyncio.wait_for(q.get(), timeout=15.0)
                 except asyncio.TimeoutError:
-                    # Keep-alive comment para proxies
                     yield ": keepalive\n\n"
                     continue
 
