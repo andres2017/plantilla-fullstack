@@ -15,11 +15,11 @@ from typing import Awaitable, Callable, Optional
 from builds.config import (
     ANTHROPIC_API_KEY,
     BUILDS_MAX_TURNS,
-    BUILDS_PER_BUILD_CAP_USD,
     BUILDS_TIMEOUT_SECONDS,
     BUILDS_WORK_ROOT,
     BUILDS_TEMPLATE_ROOT,
     BUILDS_MODEL_MAP,
+    budget_for_mode,
 )
 
 logger = logging.getLogger("builds.agent_runner")
@@ -74,6 +74,7 @@ _TEMPLATE_ADDENDA = {
     "mobile_apk": "\n\nAlcance: App movil (Capacitor/Android).",
     "backend_only": "\n\nAlcance: Solo API.",
     "backend_api": "\n\nAlcance: Solo API.",
+    "ciclo_desarrollo": "\n\nAlcance: fase del ciclo de desarrollo (negocio a mantenimiento).",
     "custom": "\n\nAlcance: libre segun el brief del usuario.",
 }
 
@@ -119,7 +120,8 @@ def copy_template(work_dir: Path) -> None:
         dest = work_dir / item.name
         if item.is_dir():
             shutil.copytree(
-                item, dest,
+                item,
+                dest,
                 ignore=shutil.ignore_patterns(*_COPY_DENYLIST, "*.pyc", "__pycache__"),
                 dirs_exist_ok=True,
             )
@@ -190,7 +192,9 @@ async def _assert_subprocess_capable() -> None:
         return
     try:
         proc = await asyncio.create_subprocess_exec(
-            sys.executable, "-c", "pass",
+            sys.executable,
+            "-c",
+            "pass",
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
@@ -221,12 +225,13 @@ async def run_agent_build(
     work_dir = Path(BUILDS_WORK_ROOT) / build_id
     zip_path = work_dir / f"build-{build_id}.zip"
     learn = mode == "learn"
+    max_budget = budget_for_mode(mode)
 
     if learn:
-        await on_progress("Modo guía: preparando carpeta liviana (sin copiar plantilla)…")
+        await on_progress(f"Modo guía (presupuesto Agent hasta ${max_budget:.2f})…")
         prepare_learn_dir(work_dir)
     else:
-        await on_progress("Preparando working dir aislado…")
+        await on_progress(f"Preparando plantilla (presupuesto Agent hasta ${max_budget:.2f})…")
         copy_template(work_dir)
         await on_progress(f"Plantilla copiada en {work_dir}")
 
@@ -247,7 +252,7 @@ async def run_agent_build(
 
     if learn:
         allowed = ["Write"]
-        max_turns = min(8, BUILDS_MAX_TURNS)
+        max_turns = min(12, BUILDS_MAX_TURNS)
         full_prompt = (
             f"Brief del usuario:\n\n{prompt.strip()}\n\n"
             f"Crea el archivo GUIA.md con el paso a paso completo. "
@@ -260,7 +265,8 @@ async def run_agent_build(
             f"Mision de la Fabrica Cyberandres:\n\n"
             f"{prompt.strip()}\n\n"
             f"Implementa los cambios necesarios sobre esta copia de la plantilla. "
-            f"No uses Bash. Solo edita archivos con las herramientas permitidas."
+            f"No uses Bash. Solo edita archivos con las herramientas permitidas. "
+            f"Prioriza un MVP usable; no reescribas el repo entero."
         )
 
     options = ClaudeAgentOptions(
@@ -268,7 +274,7 @@ async def run_agent_build(
         allowed_tools=allowed,
         disallowed_tools=["Bash", "WebSearch", "WebFetch"],
         max_turns=max_turns,
-        max_budget_usd=BUILDS_PER_BUILD_CAP_USD,
+        max_budget_usd=max_budget,
         permission_mode="acceptEdits",
         env=agent_env,
         system_prompt=_build_system_prompt(template_type, agent, mode),
@@ -279,26 +285,38 @@ async def run_agent_build(
     await on_progress("Iniciando Claude Agent SDK…")
     actual_cost = 0.0
     guide_chunks: list[str] = []
+    budget_hit = False
 
     async def _run_query():
-        nonlocal actual_cost
-        async for message in query(prompt=full_prompt, options=options):
-            if await is_cancelled():
-                raise RuntimeError("CANCELLED")
-            for attr in ("total_cost_usd", "cost_usd", "total_cost"):
-                val = getattr(message, attr, None)
-                if isinstance(val, (int, float)) and val > 0:
-                    actual_cost = float(val)
-            data = getattr(message, "data", None)
-            if isinstance(data, dict):
-                for k in ("total_cost_usd", "cost_usd"):
-                    if k in data and isinstance(data[k], (int, float)):
-                        actual_cost = float(data[k])
-            if learn and hasattr(message, "result") and message.result:
-                guide_chunks.append(str(message.result))
-            text = _message_to_progress(message)
-            if text:
-                await on_progress(text)
+        nonlocal actual_cost, budget_hit
+        try:
+            async for message in query(prompt=full_prompt, options=options):
+                if await is_cancelled():
+                    raise RuntimeError("CANCELLED")
+                for attr in ("total_cost_usd", "cost_usd", "total_cost"):
+                    val = getattr(message, attr, None)
+                    if isinstance(val, (int, float)) and val > 0:
+                        actual_cost = float(val)
+                data = getattr(message, "data", None)
+                if isinstance(data, dict):
+                    for k in ("total_cost_usd", "cost_usd"):
+                        if k in data and isinstance(data[k], (int, float)):
+                            actual_cost = float(data[k])
+                if learn and hasattr(message, "result") and message.result:
+                    guide_chunks.append(str(message.result))
+                text = _message_to_progress(message)
+                if text:
+                    await on_progress(text)
+        except Exception as exc:
+            msg = str(exc).lower()
+            if "maximum budget" in msg or "max_budget" in msg or "budget" in msg:
+                budget_hit = True
+                await on_progress(
+                    f"Tope de presupuesto Agent alcanzado (${max_budget:.2f}). "
+                    f"Empaquetando lo generado hasta ahora…"
+                )
+                return
+            raise
 
     try:
         await asyncio.wait_for(_run_query(), timeout=BUILDS_TIMEOUT_SECONDS)
@@ -314,7 +332,9 @@ async def run_agent_build(
             guia.write_text("\n\n".join(guide_chunks), encoding="utf-8")
         if not guia.is_file():
             guia.write_text(
-                "# Guía\n\nNo se generó contenido. Reintenta con un brief más claro.\n",
+                "# Guía\n\nNo se generó contenido completo. "
+                + ("Se alcanzó el tope de presupuesto. " if budget_hit else "")
+                + "Reintenta con Haiku o un brief más corto.\n",
                 encoding="utf-8",
             )
         await on_progress("Guía lista (GUIA.md)")
@@ -331,12 +351,20 @@ async def run_agent_build(
     make_zip(work_dir, zip_path)
 
     if actual_cost <= 0:
-        actual_cost = round(BUILDS_PER_BUILD_CAP_USD * (0.25 if learn else 0.5), 4)
-    actual_cost = round(min(actual_cost, BUILDS_PER_BUILD_CAP_USD), 4)
+        actual_cost = round(max_budget * (0.4 if learn else 0.5), 4)
+    actual_cost = round(min(actual_cost, max_budget), 4)
 
-    await on_progress(f"Build completado. Costo reportado: ${actual_cost}")
+    if budget_hit:
+        await on_progress(
+            f"Build completado con entrega parcial (presupuesto ${max_budget:.2f}). "
+            f"Costo reportado: ${actual_cost}"
+        )
+    else:
+        await on_progress(f"Build completado. Costo reportado: ${actual_cost}")
+
     return {
         "actual_cost_usd": actual_cost,
         "zip_path": str(zip_path),
         "work_dir": str(work_dir),
+        "budget_hit": budget_hit,
     }
