@@ -5,7 +5,7 @@ const STATE_STYLE = {
   aprendido: "border-sky-500/50 bg-sky-500/10 text-sky-400",
   en_curso: "border-amber-500/50 bg-amber-500/10 text-amber-400",
   pendiente: "border-border bg-card text-muted-foreground",
-  bloqueado: "border-border/50 bg-muted/30 text-muted-foreground opacity-60",
+  bloqueado: "border-border/50 bg-muted/20 text-muted-foreground",
   fallido: "border-red-500/50 bg-red-500/10 text-red-400",
 };
 
@@ -33,7 +33,12 @@ export const BlueprintMap = ({
           style={{ width: total ? `${Math.round((done / total) * 100)}%` : "0%" }}
         />
       </div>
-      <ul className="mt-4 space-y-2">
+      <p className="mt-2 text-[11px] text-muted-foreground">
+        {locale === "en"
+          ? "Click any step to open the free guide."
+          : "Haz clic en cualquier paso para abrir la guía gratis."}
+      </p>
+      <ul className="mt-3 space-y-2">
         {steps.map((step) => {
           const state = step.state || "pendiente";
           const selected = selectedId === step.id;
@@ -41,7 +46,6 @@ export const BlueprintMap = ({
             <li key={step.id}>
               <button
                 type="button"
-                disabled={state === "bloqueado"}
                 onClick={() => onSelect?.(step)}
                 className={`w-full border px-3 py-2 text-left text-sm transition ${
                   STATE_STYLE[state] || STATE_STYLE.pendiente

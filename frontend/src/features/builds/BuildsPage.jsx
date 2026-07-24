@@ -32,6 +32,7 @@ export default function BuildsPage() {
   const [budget, setBudget] = useState(null);
   const [llmStatus, setLlmStatus] = useState(null);
   const [preferredModel, setPreferredModel] = useState("sonnet");
+  const [composerOpen, setComposerOpen] = useState(false);
 
   const switchLocale = (next) => {
     const v = setLocale(next);
@@ -94,11 +95,9 @@ export default function BuildsPage() {
   }, [blueprint, progress]);
 
   const resolveModel = () =>
-    preferredModel ||
-    selectedStep?.model_recomendado?.[mode] ||
-    "sonnet";
+    preferredModel || selectedStep?.model_recomendado?.[mode] || "sonnet";
 
-  const applyStep = (step, nextMode) => {
+  const openComposer = (step, nextMode) => {
     setSelectedStepId(step.id);
     setMode(nextMode);
     const text =
@@ -107,6 +106,14 @@ export default function BuildsPage() {
         : step.prompt_implement || step.prompt_learn || "";
     setPrompt(text);
     setEstimate(null);
+    setComposerOpen(true);
+    if (!llmStatus?.connected) {
+      toast.message(
+        locale === "en"
+          ? "Connect your Claude key first (panel above)."
+          : "Conecta tu Claude arriba antes de gastar tokens."
+      );
+    }
   };
 
   const handleEstimate = async () => {
@@ -137,6 +144,7 @@ export default function BuildsPage() {
   const handleBuildCreated = (build) => {
     setActiveBuildId(build.id);
     setEstimate(null);
+    setComposerOpen(false);
     bumpRefresh();
   };
 
@@ -163,20 +171,10 @@ export default function BuildsPage() {
           )}
         </div>
         <div className="flex gap-2">
-          <Button
-            variant={locale === "es" ? "default" : "outline"}
-            size="sm"
-            onClick={() => switchLocale("es")}
-            data-testid="locale-es"
-          >
+          <Button variant={locale === "es" ? "default" : "outline"} size="sm" onClick={() => switchLocale("es")}>
             {t(locale, "locale_es")}
           </Button>
-          <Button
-            variant={locale === "en" ? "default" : "outline"}
-            size="sm"
-            onClick={() => switchLocale("en")}
-            data-testid="locale-en"
-          >
+          <Button variant={locale === "en" ? "default" : "outline"} size="sm" onClick={() => switchLocale("en")}>
             {t(locale, "locale_en")}
           </Button>
         </div>
@@ -209,26 +207,30 @@ export default function BuildsPage() {
           steps={mapSteps}
           progress={progress}
           selectedId={selectedStepId}
-          onSelect={(step) => setSelectedStepId(step.id)}
+          onSelect={(step) => {
+            setSelectedStepId(step.id);
+            setComposerOpen(false);
+            setEstimate(null);
+          }}
         />
         <div className="space-y-4">
           <StepPanel
             locale={locale}
             step={selectedStep}
-            onExplain={(step) => applyStep(step, "learn")}
-            onBuild={(step) => applyStep(step, "implement")}
+            onAskClaude={(step) => openComposer(step, "learn")}
+            onBuild={(step) => openComposer(step, "implement")}
           />
 
-          {!checkingActive && !activeBuildId && (
+          {!checkingActive && !activeBuildId && composerOpen && (
             <div className="border border-border bg-card p-5" data-testid="build-form">
               <div className="mb-2 flex flex-wrap gap-2 text-xs">
-                <span className="rounded border px-2 py-0.5">{t(locale, mode === "learn" ? "mode_learn" : "mode_implement")}</span>
+                <span className="rounded border px-2 py-0.5">
+                  {t(locale, mode === "learn" ? "mode_learn" : "mode_implement")}
+                </span>
                 {selectedStepId && <span className="rounded border px-2 py-0.5 font-mono">{selectedStepId}</span>}
                 <span className="rounded border px-2 py-0.5 font-mono">{resolveModel()}</span>
                 {llmStatus && !llmStatus.connected && (
-                  <span className="rounded border border-amber-500/40 px-2 py-0.5 text-amber-400">
-                    stub
-                  </span>
+                  <span className="rounded border border-amber-500/40 px-2 py-0.5 text-amber-400">stub</span>
                 )}
               </div>
               <Label htmlFor="build-prompt" className="text-xs uppercase tracking-[0.2em]">
@@ -242,11 +244,15 @@ export default function BuildsPage() {
                   setEstimate(null);
                 }}
                 className="mt-2 min-h-[120px]"
-                data-testid="build-prompt-textarea"
               />
-              <Button className="mt-4" disabled={estimating || prompt.trim().length < 15} onClick={handleEstimate}>
-                {estimating ? t(locale, "loading") : t(locale, "estimate")}
-              </Button>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button disabled={estimating || prompt.trim().length < 15} onClick={handleEstimate}>
+                  {estimating ? t(locale, "loading") : t(locale, "estimate")}
+                </Button>
+                <Button variant="outline" onClick={() => setComposerOpen(false)}>
+                  {locale === "en" ? "Cancel" : "Cancelar"}
+                </Button>
+              </div>
               {estimate && (
                 <div className="mt-5">
                   <EstimatePanel
