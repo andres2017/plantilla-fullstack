@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PlugsConnected, Plugs, Eye, EyeSlash, Trash } from "@phosphor-icons/react";
 import { fetchLlmStatus, saveLlmKey, deleteLlmKey, setLlmModel } from "../api";
@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { t } from "../i18n";
+
+const STORAGE_KEY = "fabrica_model";
 
 const FALLBACK_MODELS = [
   {
@@ -29,34 +31,66 @@ const FALLBACK_MODELS = [
   },
 ];
 
+function readStoredModel() {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY);
+    if (v === "haiku" || v === "sonnet" || v === "opus") return v;
+  } catch {
+    /* ignore */
+  }
+  return "sonnet";
+}
+
 export const ClaudeConnector = ({ locale = "es", onStatusChange }) => {
+  const onStatusChangeRef = useRef(onStatusChange);
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
+
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
-  const [model, setModel] = useState(() => localStorage.getItem("fabrica_model") || "sonnet");
+  const [model, setModel] = useState(readStoredModel);
   const [saving, setSaving] = useState(false);
+  const userPickedRef = useRef(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await fetchLlmStatus();
-      setStatus(data);
-      const preferred = data.preferred_model || localStorage.getItem("fabrica_model") || "sonnet";
-      setModel(preferred);
-      localStorage.setItem("fabrica_model", preferred);
-      onStatusChange?.({ ...data, preferred_model: preferred });
-    } catch (err) {
-      toast.error(getApiError(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [onStatusChange]);
-
+  // Solo al montar: no re-fetch cuando el padre re-renderiza
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await fetchLlmStatus();
+        if (cancelled) return;
+        setStatus(data);
+        const stored = readStoredModel();
+        const preferred =
+          userPickedRef.current || stored !== "sonnet"
+            ? stored
+            : data.preferred_model || stored;
+        const finalModel =
+          preferred === "haiku" || preferred === "sonnet" || preferred === "opus"
+            ? preferred
+            : "sonnet";
+        setModel(finalModel);
+        try {
+          localStorage.setItem(STORAGE_KEY, finalModel);
+        } catch {
+          /* ignore */
+        }
+        onStatusChangeRef.current?.({ ...data, preferred_model: finalModel });
+      } catch (err) {
+        if (!cancelled) toast.error(getApiError(err));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleConnect = async (e) => {
     e.preventDefault();
@@ -67,7 +101,7 @@ export const ClaudeConnector = ({ locale = "es", onStatusChange }) => {
       setStatus(data);
       setApiKey("");
       setOpen(false);
-      onStatusChange?.(data);
+      onStatusChangeRef.current?.(data);
       toast.success(locale === "en" ? "Claude connected" : "Claude conectado");
     } catch (err) {
       toast.error(getApiError(err));
@@ -81,7 +115,7 @@ export const ClaudeConnector = ({ locale = "es", onStatusChange }) => {
     try {
       const data = await deleteLlmKey();
       setStatus(data);
-      onStatusChange?.(data);
+      onStatusChangeRef.current?.(data);
       toast.success(locale === "en" ? "Disconnected" : "Desconectado");
     } catch (err) {
       toast.error(getApiError(err));
@@ -91,16 +125,27 @@ export const ClaudeConnector = ({ locale = "es", onStatusChange }) => {
   };
 
   const handleModelChange = async (id) => {
+    if (id !== "haiku" && id !== "sonnet" && id !== "opus") return;
+    userPickedRef.current = true;
     setModel(id);
-    localStorage.setItem("fabrica_model", id);
-    onStatusChange?.({ ...(status || {}), preferred_model: id, connected: status?.connected });
+    try {
+      localStorage.setItem(STORAGE_KEY, id);
+    } catch {
+      /* ignore */
+    }
+    onStatusChangeRef.current?.({
+      ...(status || { connected: false }),
+      preferred_model: id,
+      connected: Boolean(status?.connected),
+    });
 
     try {
       const data = await setLlmModel(id);
       setStatus(data);
-      onStatusChange?.(data);
+      // No pisar la elección local si el server devuelve otro valor viejo
+      onStatusChangeRef.current?.({ ...data, preferred_model: id });
     } catch {
-      // Preferencia local ya aplicada; el build usará preferredModel del padre
+      // La UI ya muestra el modelo elegido; el build usa preferredModel del padre
     }
   };
 
@@ -188,6 +233,10 @@ export const ClaudeConnector = ({ locale = "es", onStatusChange }) => {
             );
           })}
         </div>
+        <p className="text-[11px] text-muted-foreground">
+          {locale === "en" ? "Selected: " : "Seleccionado: "}
+          <span className="font-mono text-foreground">{model}</span>
+        </p>
       </div>
 
       {open && (
