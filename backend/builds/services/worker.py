@@ -1,7 +1,4 @@
-# Worker de builds.
-# - Key del usuario (BYOK) o ANTHROPIC_API_KEY de env → Agent SDK
-# - Sin clave → stub
-
+# Worker de builds — BYOK + learn/implement
 from __future__ import annotations
 
 import asyncio
@@ -65,6 +62,7 @@ async def _next_queued_build() -> dict | None:
 async def run_stub_build(build: dict) -> None:
     build_id = build["id"]
     now = datetime.now(timezone.utc)
+    mode = build.get("mode") or "implement"
 
     await repo.update_build(build_id, status="running", started_at=now)
     await publish(build_id, "status", {"status": "running", "queue_position": None})
@@ -74,31 +72,28 @@ async def run_stub_build(build: dict) -> None:
     work_root.mkdir(parents=True, exist_ok=True)
     await repo.update_build(build_id, work_dir=str(work_root))
 
-    steps = [
-        (0.8, "Copiando plantilla…"),
-        (1.0, "Simulando respuesta (conecta tu API key para builds reales)…"),
-        (0.8, "Generando zip de ejemplo…"),
-    ]
-    for delay, message in steps:
-        current = await repo.get_build(build_id)
-        if current and current["status"] == "cancelled":
-            await publish(build_id, "done", {"status": "cancelled", "cost_real_usd": 0.0, "download_url": None})
-            return
-        await asyncio.sleep(delay)
-        await _emit_progress(build_id, message)
+    await asyncio.sleep(0.8)
+    await _emit_progress(build_id, "Generando entrega de ejemplo…")
 
     zip_path = work_root / f"build-{build_id}.zip"
-    readme = work_root / "README-FABRICA.txt"
-    readme.write_text(
-        f"Fabrica Cyberandres — build STUB\n"
-        f"Build ID: {build_id}\n"
-        f"Prompt: {build.get('prompt', '')[:500]}\n\n"
-        f"Conecta tu API key de Claude en la Fábrica para builds reales.\n"
-        f"Los gastos de IA van a TU cuenta de Anthropic (BYOK).\n",
-        encoding="utf-8",
-    )
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.write(readme, arcname="README-FABRICA.txt")
+    if mode == "learn":
+        guia = work_root / "GUIA.md"
+        guia.write_text(
+            f"# Guía de ejemplo (STUB)\n\n"
+            f"Prompt: {build.get('prompt', '')[:800]}\n\n"
+            f"Conecta tu API key de Claude para una guía real.\n",
+            encoding="utf-8",
+        )
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.write(guia, arcname="GUIA.md")
+    else:
+        readme = work_root / "README-FABRICA.txt"
+        readme.write_text(
+            f"Fabrica STUB\nBuild: {build_id}\n{build.get('prompt', '')[:500]}\n",
+            encoding="utf-8",
+        )
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.write(readme, arcname="README-FABRICA.txt")
 
     estimated = float(build.get("estimated_cost_usd") or 0.1)
     actual = round(min(estimated * 0.85, BUILDS_PER_BUILD_CAP_USD), 4)
@@ -107,7 +102,6 @@ async def run_stub_build(build: dict) -> None:
         build_id, status="completed", actual_cost_usd=actual,
         finished_at=finished, zip_path=str(zip_path),
     )
-    await _emit_progress(build_id, f"Build completado (stub). Costo simulado: ${actual}")
     await publish(build_id, "done", {
         "status": "completed", "cost_real_usd": actual,
         "download_url": f"/api/builds/{build_id}/download",
@@ -123,7 +117,8 @@ async def run_agent_build(build: dict, api_key: str) -> None:
     await publish(build_id, "status", {"status": "running", "queue_position": None})
     await _emit_progress(
         build_id,
-        f"Worker AGENT (modelo={build.get('model') or 'sonnet'}, tipo={build.get('template_type') or 'full_stack'})",
+        f"Worker AGENT mode={build.get('mode') or 'implement'} "
+        f"model={build.get('model') or 'sonnet'}",
     )
 
     async def on_progress(msg: str):
@@ -143,6 +138,7 @@ async def run_agent_build(build: dict, api_key: str) -> None:
             agent=build.get("agent") or "implementer",
             model=build.get("model") or "sonnet",
             api_key=api_key,
+            mode=build.get("mode") or "implement",
         )
     except RuntimeError as exc:
         if str(exc) == "CANCELLED":
@@ -172,7 +168,7 @@ async def _process_build(build: dict) -> None:
 
 
 async def _worker_loop(stop: asyncio.Event) -> None:
-    logger.info("Worker de builds iniciado (BYOK: key por usuario o env)")
+    logger.info("Worker de builds iniciado (BYOK + learn/implement)")
     while not stop.is_set():
         try:
             build = await _next_queued_build()

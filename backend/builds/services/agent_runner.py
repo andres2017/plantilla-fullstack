@@ -1,4 +1,6 @@
-# Ejecuta un build real con Claude Agent SDK sobre una copia aislada de la plantilla.
+# Ejecuta un build real con Claude Agent SDK.
+# mode=implement → copia plantilla + ediciones
+# mode=learn → solo GUIA.md (sin copiar todo el repo)
 from __future__ import annotations
 
 import asyncio
@@ -54,34 +56,39 @@ Reglas obligatorias:
 
 Trabaja solo dentro del directorio de trabajo actual."""
 
+_LEARN_SYSTEM = """Eres un mentor senior de la Fábrica Cyberandres.
+Tu ÚNICA entrega es un archivo Markdown llamado GUIA.md en el directorio de trabajo.
+
+Reglas:
+1. Escribe una guía paso a paso clara para principiantes.
+2. NO reescribas ni copies un repo completo.
+3. Incluye: idea del proyecto, orden de trabajo, carpetas típicas de la plantilla
+   (FastAPI + Mongo + React), comandos locales, cómo publicar, y checklist de "hecho".
+4. Usa el idioma del usuario.
+5. Usa solo la herramienta Write para crear GUIA.md.
+6. Sé concreto y accionable; evita relleno."""
+
 _TEMPLATE_ADDENDA = {
-    "full_stack": (
-        "\n\nAlcance: App Full Stack. Podes tocar backend/ Y frontend/src/features/."
-    ),
-    "web_landing": (
-        "\n\nAlcance: Pagina web / Landing. Enfocate en frontend/src/."
-    ),
-    "mobile_apk": (
-        "\n\nAlcance: App movil (Capacitor/Android)."
-    ),
-    "backend_only": (
-        "\n\nAlcance: Solo API. Toca unicamente backend/."
-    ),
-    "custom": (
-        "\n\nAlcance: libre/avanzado segun el prompt del usuario."
-    ),
+    "full_stack": "\n\nAlcance: App Full Stack.",
+    "web_landing": "\n\nAlcance: Pagina web / Landing.",
+    "mobile_apk": "\n\nAlcance: App movil (Capacitor/Android).",
+    "backend_only": "\n\nAlcance: Solo API.",
+    "backend_api": "\n\nAlcance: Solo API.",
+    "custom": "\n\nAlcance: libre segun el brief del usuario.",
 }
 
 _AGENT_ADDENDA = {
-    "architect": "\n\nRol: arquitecto. Disena estructura; poco codigo de implementacion.",
+    "architect": "\n\nRol: arquitecto.",
     "implementer": "",
     "reviewer": "\n\nRol: revisor. NO agregues features nuevas.",
-    "mobile": "\n\nRol: movil. Prioriza Capacitor/Android.",
-    "docs": "\n\nRol: documentacion. Prioriza README y comentarios.",
+    "mobile": "\n\nRol: movil.",
+    "docs": "\n\nRol: documentacion.",
 }
 
 
-def _build_system_prompt(template_type: str, agent: str) -> str:
+def _build_system_prompt(template_type: str, agent: str, mode: str) -> str:
+    if mode == "learn":
+        return _LEARN_SYSTEM + _TEMPLATE_ADDENDA.get(template_type, "")
     return _SYSTEM_PROMPT + _TEMPLATE_ADDENDA.get(template_type, "") + _AGENT_ADDENDA.get(agent, "")
 
 
@@ -118,6 +125,12 @@ def copy_template(work_dir: Path) -> None:
             )
         else:
             shutil.copy2(item, dest)
+
+
+def prepare_learn_dir(work_dir: Path) -> None:
+    if work_dir.exists():
+        shutil.rmtree(work_dir, ignore_errors=True)
+    work_dir.mkdir(parents=True, exist_ok=True)
 
 
 def scan_secrets(work_dir: Path) -> list[str]:
@@ -197,6 +210,7 @@ async def run_agent_build(
     agent: str = "implementer",
     model: str = "sonnet",
     api_key: Optional[str] = None,
+    mode: str = "implement",
 ) -> dict:
     key = (api_key or ANTHROPIC_API_KEY or "").strip()
     if not key:
@@ -206,10 +220,15 @@ async def run_agent_build(
 
     work_dir = Path(BUILDS_WORK_ROOT) / build_id
     zip_path = work_dir / f"build-{build_id}.zip"
+    learn = mode == "learn"
 
-    await on_progress("Preparando working dir aislado…")
-    copy_template(work_dir)
-    await on_progress(f"Plantilla copiada en {work_dir}")
+    if learn:
+        await on_progress("Modo guía: preparando carpeta liviana (sin copiar plantilla)…")
+        prepare_learn_dir(work_dir)
+    else:
+        await on_progress("Preparando working dir aislado…")
+        copy_template(work_dir)
+        await on_progress(f"Plantilla copiada en {work_dir}")
 
     if await is_cancelled():
         raise RuntimeError("CANCELLED")
@@ -226,28 +245,40 @@ async def run_agent_build(
         "API_TIMEOUT_MS": str(BUILDS_TIMEOUT_SECONDS * 1000),
     }
 
+    if learn:
+        allowed = ["Write"]
+        max_turns = min(8, BUILDS_MAX_TURNS)
+        full_prompt = (
+            f"Brief del usuario:\n\n{prompt.strip()}\n\n"
+            f"Crea el archivo GUIA.md con el paso a paso completo. "
+            f"No crees otros archivos."
+        )
+    else:
+        allowed = ["Read", "Write", "Edit", "Glob", "Grep"]
+        max_turns = BUILDS_MAX_TURNS
+        full_prompt = (
+            f"Mision de la Fabrica Cyberandres:\n\n"
+            f"{prompt.strip()}\n\n"
+            f"Implementa los cambios necesarios sobre esta copia de la plantilla. "
+            f"No uses Bash. Solo edita archivos con las herramientas permitidas."
+        )
+
     options = ClaudeAgentOptions(
         cwd=str(work_dir),
-        allowed_tools=["Read", "Write", "Edit", "Glob", "Grep"],
+        allowed_tools=allowed,
         disallowed_tools=["Bash", "WebSearch", "WebFetch"],
-        max_turns=BUILDS_MAX_TURNS,
+        max_turns=max_turns,
         max_budget_usd=BUILDS_PER_BUILD_CAP_USD,
         permission_mode="acceptEdits",
         env=agent_env,
-        system_prompt=_build_system_prompt(template_type, agent),
+        system_prompt=_build_system_prompt(template_type, agent, mode),
         model=_resolve_model(model),
         setting_sources=[],
     )
 
-    full_prompt = (
-        f"Mision de la Fabrica Cyberandres:\n\n"
-        f"{prompt.strip()}\n\n"
-        f"Implementa los cambios necesarios sobre esta copia de la plantilla. "
-        f"No uses Bash. Solo edita archivos con las herramientas permitidas."
-    )
-
     await on_progress("Iniciando Claude Agent SDK…")
     actual_cost = 0.0
+    guide_chunks: list[str] = []
 
     async def _run_query():
         nonlocal actual_cost
@@ -263,6 +294,8 @@ async def run_agent_build(
                 for k in ("total_cost_usd", "cost_usd"):
                     if k in data and isinstance(data[k], (int, float)):
                         actual_cost = float(data[k])
+            if learn and hasattr(message, "result") and message.result:
+                guide_chunks.append(str(message.result))
             text = _message_to_progress(message)
             if text:
                 await on_progress(text)
@@ -275,19 +308,30 @@ async def run_agent_build(
     if await is_cancelled():
         raise RuntimeError("CANCELLED")
 
-    await on_progress("Escaneando secretos pre-zip…")
-    findings = scan_secrets(work_dir)
-    if findings:
-        await on_progress(
-            f"ADVERTENCIA: posibles secretos en {len(findings)} archivo(s): "
-            + ", ".join(findings[:5])
-        )
+    if learn:
+        guia = work_dir / "GUIA.md"
+        if not guia.is_file() and guide_chunks:
+            guia.write_text("\n\n".join(guide_chunks), encoding="utf-8")
+        if not guia.is_file():
+            guia.write_text(
+                "# Guía\n\nNo se generó contenido. Reintenta con un brief más claro.\n",
+                encoding="utf-8",
+            )
+        await on_progress("Guía lista (GUIA.md)")
+    else:
+        await on_progress("Escaneando secretos pre-zip…")
+        findings = scan_secrets(work_dir)
+        if findings:
+            await on_progress(
+                f"ADVERTENCIA: posibles secretos en {len(findings)} archivo(s): "
+                + ", ".join(findings[:5])
+            )
 
     await on_progress("Generando archivo .zip…")
     make_zip(work_dir, zip_path)
 
     if actual_cost <= 0:
-        actual_cost = round(BUILDS_PER_BUILD_CAP_USD * 0.5, 4)
+        actual_cost = round(BUILDS_PER_BUILD_CAP_USD * (0.25 if learn else 0.5), 4)
     actual_cost = round(min(actual_cost, BUILDS_PER_BUILD_CAP_USD), 4)
 
     await on_progress(f"Build completado. Costo reportado: ${actual_cost}")
