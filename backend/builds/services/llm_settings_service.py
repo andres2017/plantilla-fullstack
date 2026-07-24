@@ -14,6 +14,37 @@ logger = logging.getLogger("builds.llm_settings")
 
 COLLECTION = "user_llm_settings"
 
+# Catálogo visible en UI (nombres reales de producto Anthropic)
+MODEL_CATALOG = [
+    {
+        "id": "haiku",
+        "name": "Haiku 4.5",
+        "label_es": "Haiku 4.5",
+        "label_en": "Haiku 4.5",
+        "desc_es": "Más rápido · ideal para guías y cambios pequeños",
+        "desc_en": "Fastest · great for guides and small edits",
+        "tier": "fast",
+    },
+    {
+        "id": "sonnet",
+        "name": "Sonnet 5",
+        "label_es": "Sonnet 5",
+        "label_en": "Sonnet 5",
+        "desc_es": "Equilibrado · recomendado para el día a día",
+        "desc_en": "Balanced · recommended for daily work",
+        "tier": "balanced",
+    },
+    {
+        "id": "opus",
+        "name": "Opus 4.8",
+        "label_es": "Opus 4.8",
+        "label_en": "Opus 4.8",
+        "desc_es": "Máxima calidad · tareas difíciles / arquitectura",
+        "desc_en": "Highest quality · hard tasks / architecture",
+        "tier": "max",
+    },
+]
+
 
 def _xor_bytes(data: bytes, key: bytes) -> bytes:
     return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
@@ -54,7 +85,6 @@ async def get_settings(user_id: str) -> Optional[dict]:
 
 
 async def get_status(user_id: str) -> dict:
-    """Estado público (sin key completa)."""
     from builds.config import ANTHROPIC_API_KEY, BUILDS_MODEL_MAP
 
     doc = await get_settings(user_id)
@@ -63,11 +93,12 @@ async def get_status(user_id: str) -> dict:
     connected = user_has or env_has
     source = "user" if user_has else ("env" if env_has else None)
 
-    models = [
-        {"id": "haiku", "label_es": "Rápido / barato", "label_en": "Fast / affordable", "model_id": BUILDS_MODEL_MAP["haiku"]},
-        {"id": "sonnet", "label_es": "Equilibrado (recomendado)", "label_en": "Balanced (recommended)", "model_id": BUILDS_MODEL_MAP["sonnet"]},
-        {"id": "opus", "label_es": "Máxima calidad", "label_en": "Highest quality", "model_id": BUILDS_MODEL_MAP["opus"]},
-    ]
+    models = []
+    for m in MODEL_CATALOG:
+        models.append({
+            **m,
+            "model_id": BUILDS_MODEL_MAP.get(m["id"], m["id"]),
+        })
 
     return {
         "connected": connected,
@@ -126,7 +157,6 @@ async def update_preferred_model(user_id: str, preferred_model: str) -> dict:
 
 
 async def resolve_api_key_for_user(user_id: str | None) -> str | None:
-    """Key del usuario o fallback a env (dev)."""
     from builds.config import ANTHROPIC_API_KEY
 
     if user_id:
