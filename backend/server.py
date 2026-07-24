@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
         await create_build_indexes()
         await recover_stale_builds()
         await start_worker()
-        logger.info("Modulo builds activo (worker stub)")
+        logger.info("Modulo builds activo")
     await seed_users()
     yield
     if BUILDS_ENABLED:
@@ -116,6 +116,7 @@ if PAYMENTS_ENABLED:
 if BUILDS_ENABLED:
     from builds.config import validate_builds_config
     from builds.errors import BuildHTTPException, build_error_response
+    from builds.routers.llm import router as llm_router
     from builds.routers.builds import router as builds_router
     from builds.routers.blueprints import router as blueprints_router
 
@@ -128,6 +129,8 @@ if BUILDS_ENABLED:
             content=build_error_response(exc.code, exc.detail),
         )
 
+    # llm ANTES de builds: rutas estaticas /builds/llm/* no deben caer en /{build_id}
+    app.include_router(llm_router, prefix="/api")
     app.include_router(builds_router, prefix="/api")
     app.include_router(blueprints_router, prefix="/api")
 

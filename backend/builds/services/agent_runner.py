@@ -1,11 +1,4 @@
 # Ejecuta un build real con Claude Agent SDK sobre una copia aislada de la plantilla.
-# Respetando DECISIONS.md:
-# - cwd dedicado por build
-# - env minimo (solo ANTHROPIC_API_KEY), nunca os.environ.copy()
-# - tools: Read/Write/Edit/Glob/Grep — Bash deshabilitado
-# - max_turns + max_budget_usd + timeout duro
-# - denylist al copiar + escaneo de secretos pre-zip
-
 from __future__ import annotations
 
 import asyncio
@@ -14,9 +7,8 @@ import re
 import shutil
 import sys
 import zipfile
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Awaitable, Callable
+from typing import Awaitable, Callable, Optional
 
 from builds.config import (
     ANTHROPIC_API_KEY,
@@ -33,7 +25,6 @@ logger = logging.getLogger("builds.agent_runner")
 ProgressCb = Callable[[str], Awaitable[None]]
 IsCancelledCb = Callable[[], Awaitable[bool]]
 
-# Carpetas/archivos que NUNCA se copian al working dir del agente
 _COPY_DENYLIST = {
     ".git", ".env", ".env.local", ".env.production",
     "node_modules", "venv", ".venv", "__pycache__",
@@ -58,74 +49,40 @@ Reglas obligatorias:
 3. No inventes dependencias nuevas si se puede resolver con lo que ya hay.
 4. No toques archivos .env ni secretos.
 5. No ejecutes comandos de shell (no tienes Bash).
-6. Responde y trabaja en español cuando el usuario escriba en español.
+6. Responde y trabaja en el idioma del usuario.
 7. Al terminar, deja el codigo listo para correr (imports, rutas registradas si aplica).
 
 Trabaja solo dentro del directorio de trabajo actual."""
 
-# Addendum por tipo de entrega: que parte de la plantilla tocar y que no.
-# Se concatena al system prompt base segun el template_type elegido en la UI.
 _TEMPLATE_ADDENDA = {
     "full_stack": (
-        "\n\nAlcance: App Full Stack. Podes tocar backend/ (routers, services, "
-        "repositories, models) Y frontend/src/features/ segun lo que pida el "
-        "prompt, siguiendo el patron de features/items/ como referencia."
+        "\n\nAlcance: App Full Stack. Podes tocar backend/ Y frontend/src/features/."
     ),
     "web_landing": (
-        "\n\nAlcance: Pagina web / Landing. Enfocate en frontend/src/ (una o "
-        "pocas paginas/secciones, componentes de presentacion). Solo toca "
-        "backend/ si el prompt pide explicitamente un endpoint nuevo para esa "
-        "pagina — no agregues autenticacion ni modulos de negocio nuevos."
+        "\n\nAlcance: Pagina web / Landing. Enfocate en frontend/src/."
     ),
     "mobile_apk": (
-        "\n\nAlcance: App movil (Capacitor/Android). Enfocate en la config de "
-        "Capacitor (capacitor.config.*, android/) y en ajustes de frontend/src/ "
-        "necesarios para que la app empaquetada funcione bien (splash, iconos, "
-        "rutas). No toques backend/ salvo que el prompt lo pida explicitamente."
+        "\n\nAlcance: App movil (Capacitor/Android)."
     ),
     "backend_only": (
-        "\n\nAlcance: Solo API. Toca unicamente backend/ (routers → services → "
-        "repositories → models). No modifiques nada bajo frontend/."
+        "\n\nAlcance: Solo API. Toca unicamente backend/."
     ),
     "custom": (
-        "\n\nAlcance: libre/avanzado. No hay restriccion de carpetas fijada de "
-        "antemano — segui exactamente el alcance que describe el prompt del "
-        "usuario, ni mas ni menos."
+        "\n\nAlcance: libre/avanzado segun el prompt del usuario."
     ),
 }
 
-# Addendum por rol de agente: mismo system prompt base, distinto foco/limite.
 _AGENT_ADDENDA = {
-    "architect": (
-        "\n\nRol: arquitecto. Disena la estructura (modelos de datos, "
-        "contratos de API, mapa de archivos) y dejala documentada en comentarios "
-        "o en un archivo de notas. Escribi poco codigo de implementacion — "
-        "priorizá dejar claro el plan sobre construir la feature completa."
-    ),
-    "implementer": "",  # default: sin addendum, ya es el rol base del system prompt
-    "reviewer": (
-        "\n\nRol: revisor. NO agregues features nuevas. Revisa el codigo "
-        "existente en el alcance indicado, corrige bugs, mejora claridad y "
-        "aplica refactors seguros manteniendo el comportamiento actual."
-    ),
-    "mobile": (
-        "\n\nRol: movil. Prioriza cambios en la capa Capacitor/Android "
-        "(capacitor.config.*, android/, permisos, splash/iconos) sobre "
-        "cambios de backend o de paginas web de escritorio."
-    ),
-    "docs": (
-        "\n\nRol: documentacion. Prioriza README, docs/DECISIONS.md y "
-        "comentarios claros sobre el porque de decisiones no obvias. Cambios "
-        "de codigo solo si son necesarios para que la documentacion sea "
-        "precisa (ej. corregir un ejemplo que ya no compila)."
-    ),
+    "architect": "\n\nRol: arquitecto. Disena estructura; poco codigo de implementacion.",
+    "implementer": "",
+    "reviewer": "\n\nRol: revisor. NO agregues features nuevas.",
+    "mobile": "\n\nRol: movil. Prioriza Capacitor/Android.",
+    "docs": "\n\nRol: documentacion. Prioriza README y comentarios.",
 }
 
 
 def _build_system_prompt(template_type: str, agent: str) -> str:
-    addendum = _TEMPLATE_ADDENDA.get(template_type, "")
-    role = _AGENT_ADDENDA.get(agent, "")
-    return _SYSTEM_PROMPT + addendum + role
+    return _SYSTEM_PROMPT + _TEMPLATE_ADDENDA.get(template_type, "") + _AGENT_ADDENDA.get(agent, "")
 
 
 def _resolve_model(model: str) -> str:
@@ -135,7 +92,6 @@ def _resolve_model(model: str) -> str:
 def _repo_root() -> Path:
     if BUILDS_TEMPLATE_ROOT:
         return Path(BUILDS_TEMPLATE_ROOT).resolve()
-    # backend/builds/services/agent_runner.py → repo root = parents[3]
     return Path(__file__).resolve().parents[3]
 
 
@@ -144,15 +100,12 @@ def _should_skip(name: str) -> bool:
 
 
 def copy_template(work_dir: Path) -> None:
-    """Copia la plantilla al working dir respetando denylist."""
     src = _repo_root()
     if not src.is_dir():
         raise RuntimeError(f"Template root no existe: {src}")
-
     if work_dir.exists():
         shutil.rmtree(work_dir, ignore_errors=True)
     work_dir.mkdir(parents=True, exist_ok=True)
-
     for item in src.iterdir():
         if _should_skip(item.name):
             continue
@@ -168,7 +121,6 @@ def copy_template(work_dir: Path) -> None:
 
 
 def scan_secrets(work_dir: Path) -> list[str]:
-    """Escaneo basico pre-zip. Retorna hallazgos legibles."""
     findings: list[str] = []
     for path in work_dir.rglob("*"):
         if not path.is_file():
@@ -194,14 +146,10 @@ def make_zip(work_dir: Path, zip_path: Path) -> None:
 
 
 def _message_to_progress(msg) -> str | None:
-    """Extrae texto legible de un mensaje del SDK para el log SSE."""
     try:
-        # ResultMessage
         if hasattr(msg, "result") and msg.result:
             text = str(msg.result)
             return text[:300] + ("…" if len(text) > 300 else "")
-
-        # AssistantMessage con content blocks
         content = getattr(msg, "content", None)
         if content:
             parts = []
@@ -216,8 +164,6 @@ def _message_to_progress(msg) -> str | None:
                     parts.append(f"Tool: {name}")
             if parts:
                 return " | ".join(parts)
-
-        # Fallback: subtype de system messages
         subtype = getattr(msg, "subtype", None)
         if subtype:
             return f"[{subtype}]"
@@ -227,12 +173,6 @@ def _message_to_progress(msg) -> str | None:
 
 
 async def _assert_subprocess_capable() -> None:
-    """Prueba real de que el loop activo puede spawnear subprocesos, en vez
-    de inferirlo por el nombre de la clase del loop (isinstance contra
-    ProactorEventLoop da falsos negativos/positivos si el loop esta envuelto
-    o si el chequeo corre antes de que el loop este completamente listo).
-    En Windows, SelectorEventLoop no soporta subprocesos y el Agent SDK
-    necesita spawnear el CLI `claude`. Ver docs/BUILDS.md."""
     if sys.platform != "win32":
         return
     try:
@@ -244,13 +184,7 @@ async def _assert_subprocess_capable() -> None:
         await proc.wait()
     except NotImplementedError as e:
         raise RuntimeError(
-            "WINDOWS_EVENTLOOP: el loop activo no soporta subprocesos en Windows "
-            "(NotImplementedError al probar asyncio.create_subprocess_exec). Causa "
-            "tipica: uvicorn con --reload en Windows fuerza SelectorEventLoop, o "
-            "quedo un proceso viejo con --reload todavia escuchando en el puerto. "
-            "Solucion: usa backend/start-backend-agent.ps1 (corre sin --reload, "
-            "fuerza WindowsProactorEventLoopPolicy) y verifica que no haya otro "
-            "proceso uvicorn viejo con el mismo puerto."
+            "WINDOWS_EVENTLOOP: usa backend/start-backend-agent.ps1 sin --reload."
         ) from e
 
 
@@ -262,14 +196,11 @@ async def run_agent_build(
     template_type: str = "full_stack",
     agent: str = "implementer",
     model: str = "sonnet",
+    api_key: Optional[str] = None,
 ) -> dict:
-    """
-    Corre el Agent SDK y retorna:
-      { actual_cost_usd, zip_path, work_dir }
-    Lanza Exception si falla o timeout.
-    """
-    if not ANTHROPIC_API_KEY:
-        raise RuntimeError("ANTHROPIC_API_KEY requerida para el Agent SDK real")
+    key = (api_key or ANTHROPIC_API_KEY or "").strip()
+    if not key:
+        raise RuntimeError("ANTHROPIC_API_KEY requerida (conecta tu Claude en la Fábrica)")
 
     await _assert_subprocess_capable()
 
@@ -283,7 +214,6 @@ async def run_agent_build(
     if await is_cancelled():
         raise RuntimeError("CANCELLED")
 
-    # Import diferido: si el paquete no esta, el stub sigue funcionando
     try:
         from claude_agent_sdk import query, ClaudeAgentOptions
     except ImportError as e:
@@ -291,9 +221,8 @@ async def run_agent_build(
             "claude-agent-sdk no instalado. Corre: pip install claude-agent-sdk"
         ) from e
 
-    # env MINIMO — nunca os.environ.copy()
     agent_env = {
-        "ANTHROPIC_API_KEY": ANTHROPIC_API_KEY,
+        "ANTHROPIC_API_KEY": key,
         "API_TIMEOUT_MS": str(BUILDS_TIMEOUT_SECONDS * 1000),
     }
 
@@ -307,7 +236,7 @@ async def run_agent_build(
         env=agent_env,
         system_prompt=_build_system_prompt(template_type, agent),
         model=_resolve_model(model),
-        setting_sources=[],  # no cargar ~/.claude ni settings del host
+        setting_sources=[],
     )
 
     full_prompt = (
@@ -325,19 +254,15 @@ async def run_agent_build(
         async for message in query(prompt=full_prompt, options=options):
             if await is_cancelled():
                 raise RuntimeError("CANCELLED")
-
-            # Intentar capturar costo si el SDK lo expone
             for attr in ("total_cost_usd", "cost_usd", "total_cost"):
                 val = getattr(message, attr, None)
                 if isinstance(val, (int, float)) and val > 0:
                     actual_cost = float(val)
-
             data = getattr(message, "data", None)
             if isinstance(data, dict):
-                for key in ("total_cost_usd", "cost_usd"):
-                    if key in data and isinstance(data[key], (int, float)):
-                        actual_cost = float(data[key])
-
+                for k in ("total_cost_usd", "cost_usd"):
+                    if k in data and isinstance(data[k], (int, float)):
+                        actual_cost = float(data[k])
             text = _message_to_progress(message)
             if text:
                 await on_progress(text)
@@ -353,7 +278,6 @@ async def run_agent_build(
     await on_progress("Escaneando secretos pre-zip…")
     findings = scan_secrets(work_dir)
     if findings:
-        # No bloquear el zip, pero avisar (el admin ve el log)
         await on_progress(
             f"ADVERTENCIA: posibles secretos en {len(findings)} archivo(s): "
             + ", ".join(findings[:5])
@@ -363,9 +287,7 @@ async def run_agent_build(
     make_zip(work_dir, zip_path)
 
     if actual_cost <= 0:
-        # Fallback: usar una fraccion del tope si el SDK no reporto costo
         actual_cost = round(BUILDS_PER_BUILD_CAP_USD * 0.5, 4)
-
     actual_cost = round(min(actual_cost, BUILDS_PER_BUILD_CAP_USD), 4)
 
     await on_progress(f"Build completado. Costo reportado: ${actual_cost}")
