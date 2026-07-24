@@ -30,6 +30,16 @@ export const fetchBlueprint = (id, locale = "es") =>
 export const fetchBlueprintProgress = (id, locale = "es") =>
   api.get(`/blueprints/${id}/progress`, { params: { locale } }).then((r) => r.data.data);
 
+export const fetchLlmStatus = () => api.get("/builds/llm/status").then((r) => r.data.data);
+
+export const saveLlmKey = ({ api_key, preferred_model = "sonnet" }) =>
+  api.put("/builds/llm/key", { api_key, preferred_model }).then((r) => r.data.data);
+
+export const deleteLlmKey = () => api.delete("/builds/llm/key").then((r) => r.data.data);
+
+export const setLlmModel = (preferred_model) =>
+  api.patch("/builds/llm/model", { preferred_model }).then((r) => r.data.data);
+
 export const buildEventsUrl = (id) => `${process.env.REACT_APP_BACKEND_URL}/api/builds/${id}/events`;
 
 export const buildDownloadUrl = (id) => `${process.env.REACT_APP_BACKEND_URL}/api/builds/${id}/download`;
