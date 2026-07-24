@@ -14,7 +14,6 @@ logger = logging.getLogger("builds.llm_settings")
 
 COLLECTION = "user_llm_settings"
 
-# Catálogo visible en UI (nombres reales de producto Anthropic)
 MODEL_CATALOG = [
     {
         "id": "haiku",
@@ -100,12 +99,16 @@ async def get_status(user_id: str) -> dict:
             "model_id": BUILDS_MODEL_MAP.get(m["id"], m["id"]),
         })
 
+    preferred = (doc or {}).get("preferred_model") or "sonnet"
+    if preferred not in ("haiku", "sonnet", "opus"):
+        preferred = "sonnet"
+
     return {
         "connected": connected,
         "mode": "agent" if connected else "stub",
         "source": source,
         "key_masked": doc.get("key_masked") if doc else None,
-        "preferred_model": (doc or {}).get("preferred_model") or "sonnet",
+        "preferred_model": preferred,
         "models": models,
         "hint_es": (
             "Claude conectado. Los gastos de IA van a tu cuenta de Anthropic."
@@ -148,10 +151,14 @@ async def clear_api_key(user_id: str) -> dict:
 
 async def update_preferred_model(user_id: str, preferred_model: str) -> dict:
     model = preferred_model if preferred_model in ("haiku", "sonnet", "opus") else "sonnet"
+    now = datetime.now(timezone.utc)
     await db[COLLECTION].update_one(
         {"_id": str(user_id)},
-        {"$set": {"preferred_model": model, "updated_at": datetime.now(timezone.utc)}},
-        upsert=False,
+        {
+            "$set": {"preferred_model": model, "updated_at": now},
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
     )
     return await get_status(user_id)
 

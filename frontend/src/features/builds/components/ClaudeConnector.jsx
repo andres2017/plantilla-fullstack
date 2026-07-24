@@ -8,13 +8,34 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { t } from "../i18n";
 
+const FALLBACK_MODELS = [
+  {
+    id: "haiku",
+    name: "Haiku 4.5",
+    desc_es: "Más rápido · ideal para guías y cambios pequeños",
+    desc_en: "Fastest · great for guides and small edits",
+  },
+  {
+    id: "sonnet",
+    name: "Sonnet 5",
+    desc_es: "Equilibrado · recomendado para el día a día",
+    desc_en: "Balanced · recommended for daily work",
+  },
+  {
+    id: "opus",
+    name: "Opus 4.8",
+    desc_es: "Máxima calidad · tareas difíciles / arquitectura",
+    desc_en: "Highest quality · hard tasks / architecture",
+  },
+];
+
 export const ClaudeConnector = ({ locale = "es", onStatusChange }) => {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
-  const [model, setModel] = useState("sonnet");
+  const [model, setModel] = useState(() => localStorage.getItem("fabrica_model") || "sonnet");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -22,8 +43,10 @@ export const ClaudeConnector = ({ locale = "es", onStatusChange }) => {
     try {
       const data = await fetchLlmStatus();
       setStatus(data);
-      setModel(data.preferred_model || "sonnet");
-      onStatusChange?.(data);
+      const preferred = data.preferred_model || localStorage.getItem("fabrica_model") || "sonnet";
+      setModel(preferred);
+      localStorage.setItem("fabrica_model", preferred);
+      onStatusChange?.({ ...data, preferred_model: preferred });
     } catch (err) {
       toast.error(getApiError(err));
     } finally {
@@ -69,13 +92,15 @@ export const ClaudeConnector = ({ locale = "es", onStatusChange }) => {
 
   const handleModelChange = async (id) => {
     setModel(id);
-    if (!status?.connected) return;
+    localStorage.setItem("fabrica_model", id);
+    onStatusChange?.({ ...(status || {}), preferred_model: id, connected: status?.connected });
+
     try {
       const data = await setLlmModel(id);
       setStatus(data);
       onStatusChange?.(data);
-    } catch (err) {
-      toast.error(getApiError(err));
+    } catch {
+      // Preferencia local ya aplicada; el build usará preferredModel del padre
     }
   };
 
@@ -88,7 +113,7 @@ export const ClaudeConnector = ({ locale = "es", onStatusChange }) => {
   }
 
   const connected = Boolean(status?.connected);
-  const models = status?.models || [];
+  const models = status?.models?.length ? status.models : FALLBACK_MODELS;
 
   return (
     <div className="border border-border bg-card p-4" data-testid="claude-connector">
@@ -136,38 +161,34 @@ export const ClaudeConnector = ({ locale = "es", onStatusChange }) => {
         </div>
       </div>
 
-      {models.length > 0 && (
-        <div className="mt-4 space-y-2">
-          <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-            {locale === "en" ? "Claude model" : "Modelo Claude"}
-          </p>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {models.map((m) => {
-              const selected = model === m.id;
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => handleModelChange(m.id)}
-                  className={`rounded border px-3 py-2.5 text-left transition ${
-                    selected
-                      ? "border-primary bg-primary/10 ring-1 ring-primary/40"
-                      : "border-border hover:border-primary/40"
-                  }`}
-                  data-testid={`model-${m.id}`}
-                >
-                  <p className="text-sm font-semibold tracking-tight">
-                    {m.name || m.label_es}
-                  </p>
-                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                    {locale === "en" ? m.desc_en : m.desc_es}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
+      <div className="mt-4 space-y-2">
+        <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+          {locale === "en" ? "Claude model" : "Modelo Claude"}
+        </p>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {models.map((m) => {
+            const selected = model === m.id;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => handleModelChange(m.id)}
+                className={`cursor-pointer rounded border px-3 py-2.5 text-left transition ${
+                  selected
+                    ? "border-primary bg-primary/10 ring-1 ring-primary/40"
+                    : "border-border hover:border-primary/40"
+                }`}
+                data-testid={`model-${m.id}`}
+              >
+                <p className="text-sm font-semibold tracking-tight">{m.name || m.label_es || m.id}</p>
+                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                  {locale === "en" ? m.desc_en || m.label_en : m.desc_es || m.label_es}
+                </p>
+              </button>
+            );
+          })}
         </div>
-      )}
+      </div>
 
       {open && (
         <form onSubmit={handleConnect} className="mt-4 space-y-3 border-t border-border pt-4">
@@ -189,11 +210,6 @@ export const ClaudeConnector = ({ locale = "es", onStatusChange }) => {
                 {showKey ? <EyeSlash size={16} /> : <Eye size={16} />}
               </Button>
             </div>
-            <p className="mt-1.5 text-[11px] text-muted-foreground">
-              {locale === "en"
-                ? "Get a key at console.anthropic.com → API keys. Usage is billed to your Anthropic account."
-                : "Consigue una key en console.anthropic.com → API keys. El uso se cobra en tu cuenta de Anthropic."}
-            </p>
           </div>
           <Button type="submit" disabled={saving || apiKey.trim().length < 20}>
             {saving
