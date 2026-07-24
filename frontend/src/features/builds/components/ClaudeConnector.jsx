@@ -81,7 +81,7 @@ export const ClaudeConnector = ({ locale = "es", onStatusChange }) => {
 
   if (loading && !status) {
     return (
-      <div className="border border-border bg-card p-4 text-sm text-muted-foreground" data-testid="claude-connector-loading">
+      <div className="border border-border bg-card p-4 text-sm text-muted-foreground">
         {t(locale, "loading")}
       </div>
     );
@@ -115,13 +115,6 @@ export const ClaudeConnector = ({ locale = "es", onStatusChange }) => {
             {status?.key_masked && (
               <p className="mt-1 font-mono text-[11px] text-muted-foreground">{status.key_masked}</p>
             )}
-            {status?.source === "env" && (
-              <p className="mt-1 text-[11px] text-amber-400/90">
-                {locale === "en"
-                  ? "Using server env key (dev). Save your own key to use BYOK."
-                  : "Usando key del servidor (dev). Guarda la tuya para BYOK."}
-              </p>
-            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -144,22 +137,35 @@ export const ClaudeConnector = ({ locale = "es", onStatusChange }) => {
       </div>
 
       {models.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {models.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => handleModelChange(m.id)}
-              className={`rounded border px-2.5 py-1 text-xs transition ${
-                model === m.id
-                  ? "border-primary bg-primary/10 text-foreground"
-                  : "border-border text-muted-foreground hover:border-primary/50"
-              }`}
-              data-testid={`model-${m.id}`}
-            >
-              {locale === "en" ? m.label_en : m.label_es}
-            </button>
-          ))}
+        <div className="mt-4 space-y-2">
+          <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            {locale === "en" ? "Claude model" : "Modelo Claude"}
+          </p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {models.map((m) => {
+              const selected = model === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => handleModelChange(m.id)}
+                  className={`rounded border px-3 py-2.5 text-left transition ${
+                    selected
+                      ? "border-primary bg-primary/10 ring-1 ring-primary/40"
+                      : "border-border hover:border-primary/40"
+                  }`}
+                  data-testid={`model-${m.id}`}
+                >
+                  <p className="text-sm font-semibold tracking-tight">
+                    {m.name || m.label_es}
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                    {locale === "en" ? m.desc_en : m.desc_es}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -178,7 +184,6 @@ export const ClaudeConnector = ({ locale = "es", onStatusChange }) => {
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 className="font-mono text-sm"
-                data-testid="claude-api-key-input"
               />
               <Button type="button" variant="outline" size="icon" onClick={() => setShowKey((v) => !v)}>
                 {showKey ? <EyeSlash size={16} /> : <Eye size={16} />}
@@ -190,7 +195,7 @@ export const ClaudeConnector = ({ locale = "es", onStatusChange }) => {
                 : "Consigue una key en console.anthropic.com → API keys. El uso se cobra en tu cuenta de Anthropic."}
             </p>
           </div>
-          <Button type="submit" disabled={saving || apiKey.trim().length < 20} data-testid="claude-connect-submit">
+          <Button type="submit" disabled={saving || apiKey.trim().length < 20}>
             {saving
               ? t(locale, "loading")
               : locale === "en"

@@ -9,6 +9,7 @@ import { BlueprintMap } from "./components/BlueprintMap";
 import { StepPanel } from "./components/StepPanel";
 import { EstimatePanel } from "./components/EstimatePanel";
 import { ClaudeConnector } from "./components/ClaudeConnector";
+import { ProjectBriefWizard } from "./components/ProjectBriefWizard";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -32,7 +33,8 @@ export default function BuildsPage() {
   const [budget, setBudget] = useState(null);
   const [llmStatus, setLlmStatus] = useState(null);
   const [preferredModel, setPreferredModel] = useState("sonnet");
-  const [composerOpen, setComposerOpen] = useState(false);
+  const [flow, setFlow] = useState(null); // null | 'brief' | 'composer'
+  const [briefMeta, setBriefMeta] = useState(null);
 
   const switchLocale = (next) => {
     const v = setLocale(next);
@@ -94,26 +96,22 @@ export default function BuildsPage() {
     }));
   }, [blueprint, progress]);
 
-  const resolveModel = () =>
-    preferredModel || selectedStep?.model_recomendado?.[mode] || "sonnet";
+  const resolveModel = () => preferredModel || selectedStep?.model_recomendado?.[mode] || "sonnet";
 
-  const openComposer = (step, nextMode) => {
-    setSelectedStepId(step.id);
-    setMode(nextMode);
-    const text =
-      nextMode === "learn"
-        ? step.prompt_learn || step.prompt_implement || ""
-        : step.prompt_implement || step.prompt_learn || "";
-    setPrompt(text);
+  const startBrief = (defaultMode) => {
+    setMode(defaultMode);
     setEstimate(null);
-    setComposerOpen(true);
-    if (!llmStatus?.connected) {
-      toast.message(
-        locale === "en"
-          ? "Connect your Claude key first (panel above)."
-          : "Conecta tu Claude arriba antes de gastar tokens."
-      );
-    }
+    setPrompt("");
+    setBriefMeta(null);
+    setFlow("brief");
+  };
+
+  const handleBriefConfirm = (brief, composedPrompt) => {
+    setBriefMeta(brief);
+    setMode(brief.mode || mode);
+    setPrompt(composedPrompt);
+    setEstimate(null);
+    setFlow("composer");
   };
 
   const handleEstimate = async () => {
@@ -126,7 +124,7 @@ export default function BuildsPage() {
     try {
       const data = await estimateBuild({
         prompt: trimmed,
-        template_type: BLUEPRINT_ID,
+        template_type: briefMeta?.projectType || BLUEPRINT_ID,
         blueprint_step_id: selectedStepId || undefined,
         mode,
         locale,
@@ -144,7 +142,7 @@ export default function BuildsPage() {
   const handleBuildCreated = (build) => {
     setActiveBuildId(build.id);
     setEstimate(null);
-    setComposerOpen(false);
+    setFlow(null);
     bumpRefresh();
   };
 
@@ -209,7 +207,7 @@ export default function BuildsPage() {
           selectedId={selectedStepId}
           onSelect={(step) => {
             setSelectedStepId(step.id);
-            setComposerOpen(false);
+            setFlow(null);
             setEstimate(null);
           }}
         />
@@ -217,22 +215,38 @@ export default function BuildsPage() {
           <StepPanel
             locale={locale}
             step={selectedStep}
-            onAskClaude={(step) => openComposer(step, "learn")}
-            onBuild={(step) => openComposer(step, "implement")}
+            onAskClaude={() => startBrief("learn")}
+            onBuild={() => startBrief("implement")}
           />
 
-          {!checkingActive && !activeBuildId && composerOpen && (
+          {!checkingActive && !activeBuildId && flow === "brief" && (
+            <ProjectBriefWizard
+              locale={locale}
+              defaultMode={mode}
+              onConfirm={handleBriefConfirm}
+              onCancel={() => setFlow(null)}
+            />
+          )}
+
+          {!checkingActive && !activeBuildId && flow === "composer" && (
             <div className="border border-border bg-card p-5" data-testid="build-form">
               <div className="mb-2 flex flex-wrap gap-2 text-xs">
                 <span className="rounded border px-2 py-0.5">
                   {t(locale, mode === "learn" ? "mode_learn" : "mode_implement")}
                 </span>
-                {selectedStepId && <span className="rounded border px-2 py-0.5 font-mono">{selectedStepId}</span>}
+                {selectedStepId && (
+                  <span className="rounded border px-2 py-0.5 font-mono">{selectedStepId}</span>
+                )}
                 <span className="rounded border px-2 py-0.5 font-mono">{resolveModel()}</span>
                 {llmStatus && !llmStatus.connected && (
                   <span className="rounded border border-amber-500/40 px-2 py-0.5 text-amber-400">stub</span>
                 )}
               </div>
+              <p className="mb-2 text-xs text-muted-foreground">
+                {locale === "en"
+                  ? "Prompt composed from your answers. Edit if needed, then estimate (tokens only after you confirm the build)."
+                  : "Prompt armado con tus respuestas. Edítalo si hace falta y estima (tokens solo al confirmar el build)."}
+              </p>
               <Label htmlFor="build-prompt" className="text-xs uppercase tracking-[0.2em]">
                 {t(locale, "prompt_label")}
               </Label>
@@ -243,13 +257,16 @@ export default function BuildsPage() {
                   setPrompt(e.target.value);
                   setEstimate(null);
                 }}
-                className="mt-2 min-h-[120px]"
+                className="mt-2 min-h-[140px] font-mono text-xs"
               />
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button disabled={estimating || prompt.trim().length < 15} onClick={handleEstimate}>
                   {estimating ? t(locale, "loading") : t(locale, "estimate")}
                 </Button>
-                <Button variant="outline" onClick={() => setComposerOpen(false)}>
+                <Button variant="outline" onClick={() => setFlow("brief")}>
+                  {locale === "en" ? "Back to questions" : "Volver a preguntas"}
+                </Button>
+                <Button variant="ghost" onClick={() => setFlow(null)}>
                   {locale === "en" ? "Cancel" : "Cancelar"}
                 </Button>
               </div>
@@ -261,7 +278,7 @@ export default function BuildsPage() {
                     budget={budget}
                     onBuildCreated={handleBuildCreated}
                     createPayload={{
-                      template_type: BLUEPRINT_ID,
+                      template_type: briefMeta?.projectType || BLUEPRINT_ID,
                       blueprint_step_id: selectedStepId || undefined,
                       blueprint_version: blueprint?.version,
                       mode,
