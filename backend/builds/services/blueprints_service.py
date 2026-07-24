@@ -8,7 +8,6 @@ from typing import Any
 
 logger = logging.getLogger("builds.blueprints")
 
-# repo_root/shared/blueprints — desde backend/builds/services → parents[3]
 _BLUEPRINTS_DIR = Path(__file__).resolve().parents[3] / "shared" / "blueprints"
 
 
@@ -67,6 +66,7 @@ def compute_progress(blueprint_id: str, builds: list[dict], locale: str = "es") 
     if not bp:
         return {"blueprint_id": blueprint_id, "steps": []}
 
+    strict = bool(bp.get("orden_estricto"))
     steps_out = []
     completed_impl = set()
     completed_learn = set()
@@ -75,11 +75,9 @@ def compute_progress(blueprint_id: str, builds: list[dict], locale: str = "es") 
 
     for b in builds:
         sid = b.get("blueprint_step_id")
-        if not sid or b.get("template_type") not in (None, blueprint_id):
-            # permitir template_type == blueprint_id
-            if b.get("template_type") and b.get("template_type") != blueprint_id:
-                continue
         if not sid:
+            continue
+        if b.get("template_type") and b.get("template_type") != blueprint_id:
             continue
         st = b.get("status")
         mode = b.get("mode") or "implement"
@@ -97,7 +95,7 @@ def compute_progress(blueprint_id: str, builds: list[dict], locale: str = "es") 
     for step in bp.get("pasos") or []:
         sid = step["id"]
         deps = step.get("depende_de") or []
-        deps_ok = all(d in done_impl for d in deps)
+        deps_ok = all(d in done_impl for d in deps) if deps else True
 
         if sid in active_steps:
             state = "en_curso"
@@ -107,9 +105,9 @@ def compute_progress(blueprint_id: str, builds: list[dict], locale: str = "es") 
             state = "aprendido"
         elif sid in failed_steps and sid not in completed_impl:
             state = "fallido"
-        elif not deps_ok and (bp.get("orden_estricto") or deps):
-            # bloquear solo si hay deps y no están hechos en implement
-            state = "bloqueado" if not deps_ok else "pendiente"
+        elif strict and deps and not deps_ok:
+            # Solo bloquea construir en orden estricto; aprender siempre libre
+            state = "bloqueado"
         else:
             state = "pendiente"
 
@@ -118,9 +116,11 @@ def compute_progress(blueprint_id: str, builds: list[dict], locale: str = "es") 
             "titulo": step.get("titulo"),
             "state": state,
             "depende_de": deps,
+            "can_learn": True,
+            "can_build": deps_ok or not strict,
         })
 
-    done_count = sum(1 for s in steps_out if s["state"] == "hecho")
+    done_count = sum(1 for s in steps_out if s["state"] in ("hecho", "aprendido"))
     return {
         "blueprint_id": blueprint_id,
         "version": bp.get("version"),
