@@ -6,7 +6,7 @@ const TERMINAL_STATUSES = ["completed", "failed", "cancelled"];
 /**
  * Encapsula el ciclo de vida del canal SSE de progreso en vivo de un build
  * (GET /builds/{id}/events). Logica compartida extraida a custom hook para
- * que los componentes de presentacion (QueueProgressCard) solo consuman
+ * que los componentes de presentacion (BuildProgress) solo consuman
  * estado derivado, sin manejar EventSource directamente.
  *
  * Eventos nombrados del contrato (NO onmessage):

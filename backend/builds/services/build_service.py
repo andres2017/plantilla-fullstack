@@ -5,18 +5,29 @@ from builds.config import (
     BUILDS_PER_BUILD_CAP_USD,
     BUILDS_MAX_QUEUE_DEPTH,
     BUILDS_BASE_CONTEXT_TOKENS,
-    BUILDS_PRICE_INPUT_PER_MTOK_USD,
-    BUILDS_PRICE_OUTPUT_PER_MTOK_USD,
     BUILDS_ESTIMATE_SAFETY_MARGIN,
+    BUILDS_MODEL_PRICING,
 )
 from builds.errors import BuildHTTPException
 from builds.repositories import build_repository as repo
 
+# Multiplicador sobre BUILDS_BASE_CONTEXT_TOKENS segun cuanto contexto de la
+# plantilla necesita leer el agente para ese tipo de entrega. Heuristica, no
+# medicion exacta — ajustable aqui sin tocar el resto del flujo.
+_TEMPLATE_CONTEXT_MULTIPLIER = {
+    "full_stack": 1.0,    # backend + frontend completos
+    "web_landing": 0.5,   # solo frontend, alcance chico
+    "mobile_apk": 0.8,    # capa Capacitor/Android, contexto moderado
+    "backend_only": 0.6,  # solo backend
+    "custom": 1.0,        # sin restriccion de alcance, asumir el caso base
+}
 
-def estimate_cost(prompt: str) -> dict:
+
+def estimate_cost(prompt: str, template_type: str = "full_stack", model: str = "sonnet") -> dict:
     """Heuristica de costo (nunca se confia en el cliente)."""
+    multiplier = _TEMPLATE_CONTEXT_MULTIPLIER.get(template_type, 1.0)
     prompt_tokens = max(1, len(prompt) // 4)
-    input_tokens = BUILDS_BASE_CONTEXT_TOKENS + prompt_tokens
+    input_tokens = int(BUILDS_BASE_CONTEXT_TOKENS * multiplier) + prompt_tokens
 
     if len(prompt) < 200:
         output_tokens = 3000
@@ -25,9 +36,10 @@ def estimate_cost(prompt: str) -> dict:
     else:
         output_tokens = 15000
 
+    pricing = BUILDS_MODEL_PRICING.get(model, BUILDS_MODEL_PRICING["sonnet"])
     cost = (
-        (input_tokens / 1_000_000) * BUILDS_PRICE_INPUT_PER_MTOK_USD
-        + (output_tokens / 1_000_000) * BUILDS_PRICE_OUTPUT_PER_MTOK_USD
+        (input_tokens / 1_000_000) * pricing["input"]
+        + (output_tokens / 1_000_000) * pricing["output"]
     ) * BUILDS_ESTIMATE_SAFETY_MARGIN
 
     cost = min(cost, BUILDS_PER_BUILD_CAP_USD)
@@ -39,8 +51,15 @@ def estimate_cost(prompt: str) -> dict:
     }
 
 
-async def create_build(prompt: str, created_by: str) -> dict:
-    est = estimate_cost(prompt)
+async def create_build(
+    prompt: str,
+    created_by: str,
+    created_by_email: str = "",
+    template_type: str = "full_stack",
+    agent: str = "implementer",
+    model: str = "sonnet",
+) -> dict:
+    est = estimate_cost(prompt, template_type, model)
     estimated = est["estimated_cost_usd"]
 
     if estimated > BUILDS_PER_BUILD_CAP_USD:
@@ -63,7 +82,13 @@ async def create_build(prompt: str, created_by: str) -> dict:
             f"Cola llena ({BUILDS_MAX_QUEUE_DEPTH} builds pendientes). Espera a que termine alguno.",
         )
 
-    build = await repo.create_build(prompt, estimated, created_by)
+    build = await repo.create_build(
+        prompt, estimated, created_by,
+        created_by_email=created_by_email,
+        template_type=template_type,
+        agent=agent,
+        model=model,
+    )
     return build
 
 

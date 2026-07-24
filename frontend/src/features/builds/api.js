@@ -4,11 +4,18 @@
 // devuelven r.data.data (respuesta uniforme { success, data, error }).
 import api from "@/lib/api";
 
-export const estimateBuild = (prompt) =>
-  api.post("/builds/estimate", { prompt }).then((r) => r.data.data);
+export const estimateBuild = (prompt, { templateType = "full_stack", model = "sonnet" } = {}) =>
+  api
+    .post("/builds/estimate", { prompt, template_type: templateType, model })
+    .then((r) => r.data.data);
 
-export const createBuild = (prompt) =>
-  api.post("/builds", { prompt }).then((r) => r.data.data);
+export const createBuild = (
+  prompt,
+  { templateType = "full_stack", agent = "implementer", model = "sonnet" } = {}
+) =>
+  api
+    .post("/builds", { prompt, template_type: templateType, agent, model })
+    .then((r) => r.data.data);
 
 export const fetchBuilds = ({ page = 1, limit = 20, status = "" } = {}) =>
   api

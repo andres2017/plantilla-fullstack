@@ -30,13 +30,20 @@ async def get_budget(admin: dict = Depends(require_admin)):
 
 @router.post("/estimate", dependencies=[_write_rate])
 async def estimate(data: BuildEstimateRequest, admin: dict = Depends(require_admin)):
-    result = build_service.estimate_cost(data.prompt)
+    result = build_service.estimate_cost(data.prompt, data.template_type, data.model)
     return build_success_response(result)
 
 
 @router.post("", status_code=201, dependencies=[_write_rate])
 async def create_build(data: BuildCreate, admin: dict = Depends(require_admin)):
-    build = await build_service.create_build(data.prompt, created_by=admin["_id"])
+    build = await build_service.create_build(
+        data.prompt,
+        created_by=admin["_id"],
+        created_by_email=admin.get("email", ""),
+        template_type=data.template_type,
+        agent=data.agent,
+        model=data.model,
+    )
     return build_success_response(build)
 
 

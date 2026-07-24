@@ -16,7 +16,7 @@ const CANCELABLE = new Set(["queued", "running"]);
 
 const fmtUsd = (v) => (v == null ? "—" : `$${Number(v).toFixed(4)}`);
 
-export const QueueProgressCard = ({ buildId, onFinished }) => {
+export const BuildProgress = ({ buildId, onFinished }) => {
   const { status, queuePosition, log, connected, result } = useBuildEvents(buildId, { onDone: onFinished });
   const [cancelling, setCancelling] = useState(false);
   const logEndRef = useRef(null);
@@ -38,19 +38,19 @@ export const QueueProgressCard = ({ buildId, onFinished }) => {
   };
 
   return (
-    <Card className="border-[#4D7CFF]/40" data-testid="queue-progress-card">
+    <Card className="border-[#4D7CFF]/40" data-testid="build-progress-card">
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
         <div>
           <CardTitle className="font-heading text-xl font-black tracking-tighter">Build en curso</CardTitle>
           <CardDescription className="flex items-center gap-1.5">
             {!connected && <CircleNotch size={12} className="animate-spin" aria-hidden />}
-            <span data-testid="queue-progress-connection">{connected ? "Conectado al progreso en vivo" : "Conectando…"}</span>
+            <span data-testid="build-progress-connection">{connected ? "Conectado al progreso en vivo" : "Conectando…"}</span>
           </CardDescription>
         </div>
         <div className="flex items-center gap-2">
           {status && <BuildStatusBadge status={status} />}
           {status === "queued" && queuePosition != null && (
-            <span className="font-mono text-xs text-muted-foreground" data-testid="queue-progress-position">
+            <span className="font-mono text-xs text-muted-foreground" data-testid="build-progress-position">
               Posición: {queuePosition}
             </span>
           )}

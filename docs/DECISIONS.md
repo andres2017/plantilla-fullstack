@@ -365,6 +365,101 @@ propio `ProactorEventLoop` (robusto ante cualquier configuración de uvicorn,
 pero requiere puentear callbacks async entre loops — más riesgo/código del
 justificado para un fix de compatibilidad de Windows en dev).
 
+### Actualización 2026-07-23 (mismo día) — el chequeo por `isinstance` no bastaba
+
+**Reporte:** con `start-backend-agent.ps1` (sin `--reload`, `--loop none`)
+los builds seguían fallando con `BUILD_011_WINDOWS_EVENTLOOP`.
+
+**Investigación:** reproduje el arranque real (`--loop none`, sin
+`--reload`) con un diagnóstico temporal en el lifespan — el loop SÍ era
+`ProactorEventLoop`. El chequeo por `isinstance` no era el problema. La
+causa real: **procesos `uvicorn` huérfanos de pruebas anteriores seguían
+escuchando el puerto 8001**, uno de ellos arrancado con `--reload`
+(`SelectorEventLoop`). En Windows, `--reload` corre un proceso "reloader" +
+un hijo via `multiprocessing`; parar el proceso de la terminal no siempre
+mata al hijo, que se queda respondiendo pedidos con el loop viejo aunque
+después arranques `start-backend-agent.ps1` correctamente. Confirmado con
+`Get-CimInstance Win32_Process` (el hijo tenía `ParentProcessId` apuntando
+al reloader).
+
+**Fix aplicado (más robusto, no dependiente de un solo mecanismo):**
+1. `backend/run_agent_server.py` (nuevo): fuerza
+   `asyncio.WindowsProactorEventLoopPolicy()` **antes** de que uvicorn cree
+   el loop, en vez de confiar solo en la interpretación de `--loop none`
+   por parte de uvicorn/asyncio.
+2. `agent_runner.py`: el chequeo por `isinstance(loop, ProactorEventLoop)`
+   se reemplazó por `_assert_subprocess_capable()` — prueba real con
+   `asyncio.create_subprocess_exec` (spawnea `python -c pass` y espera). Solo
+   falla con `BUILD_011_WINDOWS_EVENTLOOP` si el spawn de verdad no funciona
+   (`NotImplementedError`), no por el nombre de la clase del loop.
+3. `worker.py`: el log de arranque del worker ahora incluye la clase del
+   loop activo en modo agente (`event loop=ProactorEventLoop`), verificable
+   a simple vista sin tocar código.
+4. `start-backend-agent.ps1`: arranca vía `run_agent_server.py` en vez de
+   `uvicorn` directo, y antes de arrancar avisa si el puerto 8001 ya tiene
+   algo escuchando (posible proceso viejo con `--reload`).
+
+Modo STUB sin cambios — no spawnea subprocesos, no le aplica ninguna parte
+de este bug.
+
+---
+
+## 2026-07-23 — Rediseño UX de la Fábrica: tipo de entrega + agente + modelo
+
+**Contexto:** el brief pidió acercar la UI de `/builds` a builders tipo
+Emergent (sin copiar marca/pixel), pero alineado a la plantilla real: el
+usuario final elige tipo de entrega, agente y modelo antes de escribir el
+prompt, ve costo/presupuesto antes de confirmar, y el historial debe
+mostrar esa config además de descargar el zip correctamente. De paso salió
+un bug real: `BuildHistoryTable.jsx` leía `build.zip_available`,
+`build.cost_real_usd` — campos que **no existen** en la respuesta de
+`GET /builds` (el backend manda `has_zip`, `actual_cost_usd`). El botón de
+descarga mostraba "Expiró" siempre, sin importar el estado real del zip.
+
+**Decisiones:**
+1. **`template_type` / `agent` / `model` opcionales en el contrato**
+   (`BuildCreate`/`BuildEstimateRequest`, `Literal` de Pydantic con
+   default), persistidos en el doc de Mongo y devueltos en `BuildPublic`.
+   Clientes viejos que no los manden siguen funcionando (`full_stack` /
+   `implementer` / `sonnet` por default) — sin breaking change.
+2. **Addendum de system prompt por tipo y por agente** en
+   `agent_runner.py` (`_TEMPLATE_ADDENDA` / `_AGENT_ADDENDA`), concatenados
+   al `_SYSTEM_PROMPT` base. Las reglas obligatorias (capas, sin Bash, 4
+   estados) quedan intactas para todos los tipos/agentes — el addendum solo
+   acota alcance o foco.
+3. **Catálogo de modelos configurable por env** (`BUILDS_MODEL_MAP` en
+   `config.py`): alias amigable (`haiku`/`sonnet`/`opus`) → model id real,
+   con tarifa propia (`BUILDS_MODEL_PRICING`) para que el estimate refleje
+   el modelo elegido, no solo el tamaño del prompt.
+4. **`created_by_email` agregado al doc del build** (antes solo se
+   guardaba el `_id` del admin, sin forma barata de mostrar quién disparó
+   el build en el historial). Se toma de `admin["email"]` ya disponible en
+   el request — sin lookup extra.
+5. **`has_zip` ahora es `Path(zip_path).is_file()`**, no solo
+   `bool(zip_path)` — un zip borrado tras un redeploy ya no se reporta
+   como disponible.
+6. **Fix del bug de campos** en `BuildHistoryTable.jsx`
+   (`zip_available`→`has_zip`, `cost_real_usd`→`actual_cost_usd`) —
+   causa real del botón "Expiró" persistente.
+7. **`BuildForm.jsx` y `QueueProgressCard.jsx` retirados**, reemplazados
+   por `PromptComposer.jsx` + `TemplateTypePicker.jsx` +
+   `AgentModelPicker.jsx` (nuevos) y `BuildProgress.jsx` (mismo contenido
+   que `QueueProgressCard`, renombrado). `BuildsPage.jsx` pasa a dueño único
+   del estado del formulario (tipo, agente, modelo, prompt, estimate) — ya
+   no hay un `BuildForm` intermedio.
+
+**Validado en navegador (modo STUB):** flujo completo — chip de tipo,
+help text dinámico, hint de "Recomendado" en el select de modelo, ejemplo
+precargado por tipo, estimate reflejando el multiplicador de contexto por
+`template_type`, confirmación, build corriendo y completando, historial
+mostrando costo real, tipo/agente/modelo, `created_by_email` y botón de
+descarga activo (no "Expiró").
+
+**Alternativa descartada:** mandar `template_type`/`agent`/`model` como
+query params en vez de body — se descartó para mantener un solo contrato
+JSON consistente con el resto de la API (`{success, data, error}` ya
+opera sobre bodies, no querystrings, para writes).
+
 ---
 
 *Registra aquí cada decisión de arquitectura nueva: contexto, alternativas

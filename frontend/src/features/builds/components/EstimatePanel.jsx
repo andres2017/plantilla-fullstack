@@ -26,28 +26,41 @@ const fmtUsd = (v) => `$${Number(v ?? 0).toFixed(4)}`;
 
 const BUCKET_LABELS = { pequeño: "Pequeño", pequeno: "Pequeño", mediano: "Mediano", grande: "Grande" };
 
-export const EstimatePanel = ({ estimate, prompt, onBuildCreated }) => {
+export const EstimatePanel = ({
+  estimate,
+  prompt,
+  budget,
+  templateType = "full_stack",
+  agent = "implementer",
+  model = "sonnet",
+  onBuildCreated,
+}) => {
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
 
   const {
     size_bucket,
-    estimated_input_tokens,
-    estimated_output_tokens,
+    input_tokens_est: estimated_input_tokens,
+    output_tokens_est: estimated_output_tokens,
     estimated_cost_usd,
-    per_build_cap_usd,
-    within_per_build_cap,
-    daily_spent_usd,
-    daily_cap_usd,
-    daily_remaining_usd,
-    within_daily_budget,
-    within_budget,
   } = estimate;
+
+  // /builds/estimate no devuelve topes ni flags de presupuesto (solo costo y
+  // tokens) — se reutiliza el estado de /builds/budget que ya cargo
+  // BudgetWidget (ver BuildsPage) en vez de confiar en campos inexistentes,
+  // que por el ?? 0 de fmtUsd quedaban silenciosamente en $0.00.
+  const per_build_cap_usd = budget?.per_build_cap_usd ?? 0;
+  const daily_spent_usd = budget?.spent_usd ?? 0;
+  const daily_cap_usd = budget?.cap_usd ?? 0;
+  const daily_remaining_usd = budget?.remaining_usd ?? 0;
+  const within_per_build_cap = budget != null && estimated_cost_usd <= per_build_cap_usd;
+  const within_daily_budget = budget != null && estimated_cost_usd <= daily_remaining_usd;
+  const within_budget = within_per_build_cap && within_daily_budget;
 
   const handleConfirm = async () => {
     setCreating(true);
     try {
-      const build = await createBuild(prompt);
+      const build = await createBuild(prompt, { templateType, agent, model });
       toast.success("Build encolado. Sigue el progreso en vivo abajo.");
       setOpen(false);
       onBuildCreated(build);
@@ -104,19 +117,25 @@ export const EstimatePanel = ({ estimate, prompt, onBuildCreated }) => {
         >
           <WarningCircle size={18} className="mt-0.5 shrink-0 text-[#FF2A2A]" />
           <div className="text-xs text-muted-foreground">
-            {!within_per_build_cap && (
-              <p>
-                El costo estimado ({fmtUsd(estimated_cost_usd)}) supera el tope máximo por build (
-                {fmtUsd(per_build_cap_usd)}).
-              </p>
+            {budget == null ? (
+              <p>No se pudo verificar el presupuesto del día. Reintenta desde el panel de arriba.</p>
+            ) : (
+              <>
+                {!within_per_build_cap && (
+                  <p>
+                    El costo estimado ({fmtUsd(estimated_cost_usd)}) supera el tope máximo por build (
+                    {fmtUsd(per_build_cap_usd)}).
+                  </p>
+                )}
+                {!within_daily_budget && (
+                  <p>
+                    El presupuesto diario restante ({fmtUsd(daily_remaining_usd)} de {fmtUsd(daily_cap_usd)}) no
+                    alcanza para este build.
+                  </p>
+                )}
+                <p className="mt-1 text-foreground">Reduce el alcance del prompt o espera a que se libere presupuesto.</p>
+              </>
             )}
-            {!within_daily_budget && (
-              <p>
-                El presupuesto diario restante ({fmtUsd(daily_remaining_usd)} de {fmtUsd(daily_cap_usd)}) no alcanza
-                para este build.
-              </p>
-            )}
-            <p className="mt-1 text-foreground">Reduce el alcance del prompt o espera a que se libere presupuesto.</p>
           </div>
         </div>
       )}

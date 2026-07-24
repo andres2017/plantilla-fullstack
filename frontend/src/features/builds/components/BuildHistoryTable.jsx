@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { BuildStatusBadge } from "./BuildStatusBadge";
+import { TEMPLATE_TYPES, AGENTS, MODELS } from "../constants";
 
 const PAGE_SIZE = 10;
 
@@ -19,6 +20,8 @@ const fmtUsd = (v) => (v == null ? "—" : `$${Number(v).toFixed(4)}`);
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" }) : "—");
 
 const truncate = (text, max = 60) => (text && text.length > max ? `${text.slice(0, max)}…` : text || "—");
+
+const shortLabel = (list, value) => list.find((item) => item.value === value)?.label || value || "—";
 
 export const BuildHistoryTable = ({ refreshKey = 0 }) => {
   const [state, setState] = useState({ status: "loading", data: null, error: "" });
@@ -45,7 +48,7 @@ export const BuildHistoryTable = ({ refreshKey = 0 }) => {
       <div data-testid="build-history">
         <p className="font-heading text-lg font-black tracking-tighter">Historial de builds</p>
 
-        <div className="mt-3 border border-border bg-card">
+        <div className="mt-3 overflow-x-auto border border-border bg-card">
           {/* Estado: cargando */}
           {state.status === "loading" && (
             <div className="space-y-3 p-5" data-testid="build-history-loading-state">
@@ -88,6 +91,7 @@ export const BuildHistoryTable = ({ refreshKey = 0 }) => {
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="text-xs uppercase tracking-[0.2em]">Fecha</TableHead>
                   <TableHead className="text-xs uppercase tracking-[0.2em]">Prompt</TableHead>
+                  <TableHead className="text-xs uppercase tracking-[0.2em]">Tipo / agente / modelo</TableHead>
                   <TableHead className="text-xs uppercase tracking-[0.2em]">Estado</TableHead>
                   <TableHead className="text-xs uppercase tracking-[0.2em]">Costo est. / real</TableHead>
                   <TableHead className="text-xs uppercase tracking-[0.2em]">Disparado por</TableHead>
@@ -107,6 +111,11 @@ export const BuildHistoryTable = ({ refreshKey = 0 }) => {
                         </TooltipTrigger>
                         <TooltipContent className="max-w-sm whitespace-pre-wrap">{build.prompt}</TooltipContent>
                       </Tooltip>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap font-mono text-[11px] text-muted-foreground" data-testid={`build-config-${build.id}`}>
+                      {shortLabel(TEMPLATE_TYPES, build.template_type)}
+                      <br />
+                      {shortLabel(AGENTS, build.agent)} · {shortLabel(MODELS, build.model)}
                     </TableCell>
                     <TableCell>
                       {build.status === "failed" && build.error_message ? (
@@ -129,11 +138,11 @@ export const BuildHistoryTable = ({ refreshKey = 0 }) => {
                       )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
-                      {fmtUsd(build.estimated_cost_usd)} / {fmtUsd(build.cost_real_usd)}
+                      {fmtUsd(build.estimated_cost_usd)} / {fmtUsd(build.actual_cost_usd)}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{build.created_by_email}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{build.created_by_email || "—"}</TableCell>
                     <TableCell>
-                      {build.zip_available ? (
+                      {build.has_zip ? (
                         <Button asChild variant="outline" size="icon" className="h-8 w-8" data-testid={`download-build-${build.id}`}>
                           <a href={buildDownloadUrl(build.id)} download aria-label={`Descargar resultado del build ${build.id}`}>
                             <DownloadSimple size={15} />
@@ -148,14 +157,16 @@ export const BuildHistoryTable = ({ refreshKey = 0 }) => {
                                 size="icon"
                                 className="h-8 w-8"
                                 disabled
-                                aria-label="Descarga no disponible: expiró"
+                                aria-label="Descarga no disponible"
                                 data-testid={`download-build-${build.id}-disabled`}
                               >
                                 <DownloadSimple size={15} />
                               </Button>
                             </span>
                           </TooltipTrigger>
-                          <TooltipContent>Expiró</TooltipContent>
+                          <TooltipContent>
+                            {build.status === "completed" ? "El zip expiró (redeploy o limpieza)" : "Todavía no hay zip disponible"}
+                          </TooltipContent>
                         </Tooltip>
                       )}
                     </TableCell>

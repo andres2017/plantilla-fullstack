@@ -1,4 +1,5 @@
 from datetime import datetime, timezone, date
+from pathlib import Path
 from typing import Optional, List, Tuple
 from bson import ObjectId
 from core.database import db
@@ -6,33 +7,54 @@ from core.time import as_utc
 
 
 def _to_public(doc: dict) -> dict:
+    zip_path = doc.get("zip_path")
     return {
         "id": str(doc["_id"]),
         "prompt": doc["prompt"],
         "status": doc["status"],
+        "template_type": doc.get("template_type", "full_stack"),
+        "agent": doc.get("agent", "implementer"),
+        "model": doc.get("model", "sonnet"),
         "estimated_cost_usd": doc.get("estimated_cost_usd", 0.0),
         "actual_cost_usd": doc.get("actual_cost_usd"),
         "error_code": doc.get("error_code"),
         "error_message": doc.get("error_message"),
         "created_by": doc.get("created_by", ""),
+        "created_by_email": doc.get("created_by_email", ""),
         "created_at": as_utc(doc["created_at"]),
         "started_at": as_utc(doc["started_at"]) if doc.get("started_at") else None,
         "finished_at": as_utc(doc["finished_at"]) if doc.get("finished_at") else None,
         "events": doc.get("events", []),
-        "has_zip": bool(doc.get("zip_path")),
+        # Path.is_file() en vez de solo bool(zip_path): el campo en Mongo
+        # puede seguir apuntando a un zip que ya no existe (redeploy, limpieza
+        # manual del work_dir) — el boton de descarga no debe prometer un
+        # archivo que ya no esta.
+        "has_zip": bool(zip_path) and Path(zip_path).is_file(),
     }
 
 
-async def create_build(prompt: str, estimated_cost: float, created_by: str) -> dict:
+async def create_build(
+    prompt: str,
+    estimated_cost: float,
+    created_by: str,
+    created_by_email: str = "",
+    template_type: str = "full_stack",
+    agent: str = "implementer",
+    model: str = "sonnet",
+) -> dict:
     now = datetime.now(timezone.utc)
     doc = {
         "prompt": prompt,
         "status": "queued",
+        "template_type": template_type,
+        "agent": agent,
+        "model": model,
         "estimated_cost_usd": estimated_cost,
         "actual_cost_usd": None,
         "error_code": None,
         "error_message": None,
         "created_by": created_by,
+        "created_by_email": created_by_email,
         "created_at": now,
         "started_at": None,
         "finished_at": None,
