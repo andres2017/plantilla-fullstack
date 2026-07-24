@@ -1,14 +1,11 @@
 {
   "id": "full_stack",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "orden_estricto": false,
-  "titulo": {
-    "es": "App completa",
-    "en": "Full-stack app"
-  },
+  "titulo": { "es": "App completa", "en": "Full-stack app" },
   "descripcion": {
-    "es": "Aplicación con login, datos, servidor y pantallas. Ideal para aprender de punta a punta.",
-    "en": "App with sign-in, data, API and screens. Ideal to learn end-to-end."
+    "es": "Aplicación con login, datos, servidor y pantallas. La guía de cada paso es gratis; Claude solo cuando construyes.",
+    "en": "App with sign-in, data, API and screens. Each step guide is free; Claude only when you build."
   },
   "local_hint": {
     "es": "En tu PC: Mongo (o Atlas), backend en :8001, frontend en :3000. Secretos solo en .env.",
@@ -26,60 +23,95 @@
         "es": "Para que cada persona tenga su cuenta y sus datos seguros.",
         "en": "So each person has an account and their data stays safe."
       },
-      "que_aprenderas": {
+      "guia": {
         "es": [
-          "Qué es login y registro",
-          "Cómo viaja la sesión (cookie/token) en esta plantilla",
-          "Por qué el servidor vuelve a comprobar el rol"
+          {
+            "titulo": "1. Idea simple",
+            "texto": "Login es comprobar quién eres. Registro es crear la cuenta. La sesión recuerda que ya entraste sin volver a escribir la contraseña en cada pantalla."
+          },
+          {
+            "titulo": "2. Cómo fluye en esta plantilla",
+            "items": [
+              "El navegador envía email y contraseña a POST /api/auth/login",
+              "El servidor verifica en Mongo y responde con una cookie httpOnly",
+              "Las siguientes peticiones llevan esa cookie; el backend lee el usuario",
+              "Rutas admin usan require_admin: si no eres admin → 403"
+            ]
+          },
+          {
+            "titulo": "3. Archivos que debes abrir",
+            "items": [
+              "backend/routers/auth.py — rutas HTTP",
+              "backend/services/auth_service.py — lógica de login/registro",
+              "backend/core/security.py — hash, JWT, require_admin",
+              "frontend/src/features/auth/ — pantallas Login y contexto"
+            ]
+          },
+          {
+            "titulo": "4. Practica sin Claude",
+            "texto": "Arranca backend y frontend, entra con admin, cierra sesión, prueba el usuario demo. Anota qué pasa si no hay cookie."
+          }
         ],
         "en": [
-          "What login and sign-up are",
-          "How the session (cookie/token) flows in this template",
-          "Why the server re-checks the role"
+          {
+            "titulo": "1. Simple idea",
+            "texto": "Login proves who you are. Sign-up creates the account. The session remembers you without typing the password on every page."
+          },
+          {
+            "titulo": "2. Flow in this template",
+            "items": [
+              "Browser sends email + password to POST /api/auth/login",
+              "Server checks Mongo and sets an httpOnly cookie",
+              "Later requests send that cookie; backend resolves the user",
+              "Admin routes use require_admin: not admin → 403"
+            ]
+          },
+          {
+            "titulo": "3. Files to open",
+            "items": [
+              "backend/routers/auth.py",
+              "backend/services/auth_service.py",
+              "backend/core/security.py",
+              "frontend/src/features/auth/"
+            ]
+          },
+          {
+            "titulo": "4. Practice without Claude",
+            "texto": "Start backend and frontend, sign in as admin, sign out, try the demo user. Note what happens without a cookie."
+          }
         ]
       },
-      "archivos_tipicos": [
-        "backend/routers/auth.py",
-        "backend/services/auth_service.py",
-        "backend/core/security.py",
-        "frontend/src/features/auth/"
-      ],
+      "que_aprenderas": {
+        "es": ["Qué es login y registro", "Cómo viaja la sesión (cookie/token)", "Por qué el servidor vuelve a comprobar el rol"],
+        "en": ["What login and sign-up are", "How the session flows", "Why the server re-checks the role"]
+      },
+      "archivos_tipicos": ["backend/routers/auth.py", "backend/services/auth_service.py", "backend/core/security.py", "frontend/src/features/auth/"],
       "depende_de": [],
       "agent_recomendado": "implementer",
       "model_recomendado": { "learn": "haiku", "implement": "sonnet" },
       "prompt_learn": {
-        "es": "Explícame como a un principiante cómo funciona el login en esta plantilla: archivos, orden de una petición y checklist de conceptos. Sin código de producción.",
-        "en": "Explain like I'm a beginner how login works in this template: files, request order, and a concept checklist. No production code."
+        "es": "Explícame como principiante el login de esta plantilla: archivos y orden de una petición. Sin código de producción.",
+        "en": "Explain login in this template for a beginner: files and request order. No production code."
       },
       "prompt_implement": {
-        "es": "Mejora o documenta el flujo de autenticación solo en las capas correctas (router → service). No toques pagos ni builds. Reporta archivos y cómo probar con curl.",
-        "en": "Improve or document the auth flow only in the correct layers (router → service). Do not touch payments or builds. Report files and how to test with curl."
+        "es": "Mejora o documenta el flujo de autenticación en router → service. No toques pagos ni builds.",
+        "en": "Improve or document auth in router → service. Do not touch payments or builds."
       },
       "criterio_de_hecho": {
-        "es": [
-          "Puedo iniciar sesión con el usuario demo",
-          "Sin sesión, una ruta protegida responde 401"
-        ],
-        "en": [
-          "I can sign in with the demo user",
-          "Without a session, a protected route returns 401"
-        ]
+        "es": ["Puedo iniciar sesión con el usuario demo", "Sin sesión, una ruta protegida responde 401"],
+        "en": ["I can sign in with the demo user", "Without a session, a protected route returns 401"]
       },
       "probar_en_local": {
-        "es": [
-          "Arranca backend y frontend",
-          "Abre /login e ingresa con admin",
-          "Confirma que entras al panel"
-        ],
-        "en": [
-          "Start backend and frontend",
-          "Open /login and sign in as admin",
-          "Confirm you reach the dashboard"
-        ]
+        "es": ["Arranca backend y frontend", "Abre /login e ingresa con admin", "Confirma que entras al panel"],
+        "en": ["Start backend and frontend", "Open /login and sign in as admin", "Confirm you reach the dashboard"]
+      },
+      "mentalidad_senior": {
+        "es": ["Nunca confíes solo en el frontend para seguridad", "Cookies httpOnly reducen riesgo de XSS robando tokens", "MVP: login + un rol basta; OAuth puede esperar"],
+        "en": ["Never trust the frontend alone for security", "httpOnly cookies reduce XSS token theft", "MVP: login + one role is enough; OAuth can wait"]
       },
       "publicar_pista": {
-        "es": "En producción necesitas COOKIE_SECURE y CORS con tu dominio real.",
-        "en": "In production you need COOKIE_SECURE and CORS with your real domain."
+        "es": "En producción: COOKIE_SECURE=true y CORS con tu dominio real.",
+        "en": "In production: COOKIE_SECURE=true and CORS with your real domain."
       }
     },
     {
@@ -87,35 +119,79 @@
       "titulo": { "es": "Tus datos", "en": "Your data model" },
       "para_que": {
         "es": "Definir qué información guarda la app (productos, clientes, etc.).",
-        "en": "Define what information the app stores (products, customers, etc.)."
+        "en": "Define what information the app stores."
+      },
+      "guia": {
+        "es": [
+          {
+            "titulo": "1. Idea simple",
+            "texto": "Un modelo es la forma de un dato: nombre, precio, dueño… Mongo guarda documentos JSON; una base relacional usa tablas. En esta plantilla usamos Mongo."
+          },
+          {
+            "titulo": "2. Capas",
+            "items": [
+              "models/ — qué campos existen (Pydantic)",
+              "repositories/ — hablar con Mongo (crear, listar, actualizar)",
+              "services/ — reglas de negocio",
+              "routers/ — HTTP que ve el mundo exterior"
+            ]
+          },
+          {
+            "titulo": "3. Practica",
+            "texto": "Abre backend/models/item.py y el repositorio de items. Crea un item desde la UI Items y míralo en Mongo."
+          }
+        ],
+        "en": [
+          {
+            "titulo": "1. Simple idea",
+            "texto": "A model is the shape of your data. Mongo stores JSON documents. This template uses Mongo."
+          },
+          {
+            "titulo": "2. Layers",
+            "items": [
+              "models/ — fields (Pydantic)",
+              "repositories/ — Mongo access",
+              "services/ — business rules",
+              "routers/ — HTTP"
+            ]
+          },
+          {
+            "titulo": "3. Practice",
+            "texto": "Open backend/models/item.py and the items repository. Create an item from the Items UI and inspect it in Mongo."
+          }
+        ]
       },
       "que_aprenderas": {
-        "es": ["Qué es un modelo", "MongoDB vs tablas (idea general)", "Campos obligatorios vs opcionales"],
-        "en": ["What a model is", "MongoDB vs tables (big picture)", "Required vs optional fields"]
+        "es": ["Qué es un modelo", "MongoDB vs tablas (idea)", "Campos obligatorios vs opcionales"],
+        "en": ["What a model is", "Mongo vs tables", "Required vs optional fields"]
       },
       "archivos_tipicos": ["backend/models/", "backend/repositories/"],
       "depende_de": ["auth"],
       "agent_recomendado": "architect",
       "model_recomendado": { "learn": "haiku", "implement": "sonnet" },
       "prompt_learn": {
-        "es": "Explícame qué es el modelo de datos en esta plantilla y cómo se conecta con MongoDB, sin código de producción.",
-        "en": "Explain the data model in this template and how it connects to MongoDB, without production code."
+        "es": "Explícame el modelo de datos y Mongo en esta plantilla, sin código de producción.",
+        "en": "Explain the data model and Mongo in this template, without production code."
       },
       "prompt_implement": {
-        "es": "Agrega o ajusta un modelo de negocio simple siguiendo models + repository. No rompas auth.",
-        "en": "Add or adjust a simple business model following models + repository. Do not break auth."
+        "es": "Agrega o ajusta un modelo simple (models + repository). No rompas auth.",
+        "en": "Add or adjust a simple model (models + repository). Do not break auth."
       },
       "criterio_de_hecho": {
         "es": ["El modelo está en backend/models", "Se puede crear un registro de prueba"],
-        "en": ["The model lives under backend/models", "A test record can be created"]
+        "en": ["Model lives under backend/models", "A test record can be created"]
       },
       "probar_en_local": {
         "es": ["Revisa el modelo en el código", "Crea un item desde la UI o API"],
         "en": ["Review the model in code", "Create an item from the UI or API"]
       },
+      "mentalidad_senior": {
+        "es": ["Empieza con pocos campos; ampliar es más fácil que borrar", "Nombra en singular claro: Item, no DataStuff"],
+        "en": ["Start with few fields", "Use clear singular names"]
+      },
       "publicar_pista": {
-        "es": "Usa MongoDB Atlas en la nube; copia MONGO_URL solo en el hosting.",
-        "en": "Use MongoDB Atlas in the cloud; put MONGO_URL only on the host."
+        "es": "MongoDB Atlas en la nube; MONGO_URL solo en el hosting.",
+        "en": "MongoDB Atlas; MONGO_URL only on the host."
       }
     },
     {
@@ -123,35 +199,75 @@
       "titulo": { "es": "Funciones del servidor", "en": "Server API layers" },
       "para_que": {
         "es": "Crear, listar, editar y borrar datos de forma ordenada (capas).",
-        "en": "Create, list, edit and delete data in an orderly way (layers)."
+        "en": "Create, list, edit and delete data in layers."
+      },
+      "guia": {
+        "es": [
+          {
+            "titulo": "1. Por qué capas",
+            "texto": "Si todo está en un solo archivo, el proyecto se vuelve imposible de mantener. Router recibe HTTP, service decide, repository habla con la base."
+          },
+          {
+            "titulo": "2. Ejemplo mental: listar items",
+            "items": [
+              "GET /api/items → routers/items.py",
+              "Llama a item_service.list_items",
+              "El service pide al repository",
+              "Respuesta uniforme { success, data, error }"
+            ]
+          },
+          {
+            "titulo": "3. Practica",
+            "texto": "Con curl o el navegador llama GET /api/items estando logueado. Lee el código de arriba abajo."
+          }
+        ],
+        "en": [
+          {
+            "titulo": "1. Why layers",
+            "texto": "Router = HTTP, service = rules, repository = database."
+          },
+          {
+            "titulo": "2. Example: list items",
+            "items": [
+              "GET /api/items → routers/items.py",
+              "item_service.list_items",
+              "repository query",
+              "Uniform { success, data, error }"
+            ]
+          }
+        ]
       },
       "que_aprenderas": {
         "es": ["router → service → repository", "Por qué no mezclar todo en un archivo"],
-        "en": ["router → service → repository", "Why not mix everything in one file"]
+        "en": ["router → service → repository", "Why not one giant file"]
       },
       "archivos_tipicos": ["backend/routers/", "backend/services/", "backend/repositories/"],
       "depende_de": ["domain_model"],
       "agent_recomendado": "implementer",
       "model_recomendado": { "learn": "haiku", "implement": "sonnet" },
       "prompt_learn": {
-        "es": "Explícame las capas de la API en esta plantilla con un ejemplo de listar items.",
-        "en": "Explain the API layers in this template with a list-items example."
+        "es": "Explícame las capas de la API con el ejemplo de listar items.",
+        "en": "Explain API layers with the list-items example."
       },
       "prompt_implement": {
-        "es": "Agrega un endpoint útil siguiendo router → service → repository. Reporta cómo probarlo.",
-        "en": "Add a useful endpoint following router → service → repository. Report how to test it."
+        "es": "Agrega un endpoint útil siguiendo router → service → repository.",
+        "en": "Add a useful endpoint following router → service → repository."
       },
       "criterio_de_hecho": {
         "es": ["GET de lista responde 200", "Errores usan formato uniforme"],
-        "en": ["List GET returns 200", "Errors use a uniform format"]
+        "en": ["List GET returns 200", "Uniform error format"]
       },
       "probar_en_local": {
-        "es": ["curl al endpoint nuevo", "Revisa la respuesta JSON"],
-        "en": ["curl the new endpoint", "Check the JSON response"]
+        "es": ["curl al endpoint", "Revisa el JSON"],
+        "en": ["curl the endpoint", "Check JSON"]
+      },
+      "mentalidad_senior": {
+        "es": ["Un endpoint = una intención clara", "Valida entrada con Pydantic"],
+        "en": ["One endpoint = one clear intent", "Validate input with Pydantic"]
       },
       "publicar_pista": {
-        "es": "La API pública debe tener HTTPS y CORS correcto.",
-        "en": "The public API needs HTTPS and correct CORS."
+        "es": "HTTPS y CORS correctos en producción.",
+        "en": "HTTPS and correct CORS in production."
       }
     },
     {
@@ -159,35 +275,66 @@
       "titulo": { "es": "Pantallas", "en": "Screens" },
       "para_que": {
         "es": "Lo que la persona ve: lista, detalle y formularios.",
-        "en": "What people see: list, detail and forms."
+        "en": "What people see: lists, detail and forms."
+      },
+      "guia": {
+        "es": [
+          {
+            "titulo": "1. Los 4 estados",
+            "items": [
+              "Cargando — skeleton o spinner",
+              "Vacío — aún no hay datos, con CTA",
+              "Error — mensaje + reintentar",
+              "Éxito — la tabla o lista real"
+            ]
+          },
+          {
+            "titulo": "2. Dónde está",
+            "texto": "frontend/src/features/items/ es el ejemplo. Copia ese patrón para cada feature nueva."
+          }
+        ],
+        "en": [
+          {
+            "titulo": "1. Four states",
+            "items": ["Loading", "Empty", "Error", "Success"]
+          },
+          {
+            "titulo": "2. Where",
+            "texto": "frontend/src/features/items/ is the reference pattern."
+          }
+        ]
       },
       "que_aprenderas": {
-        "es": ["4 estados: cargando, vacío, error, éxito", "features/ en el frontend"],
-        "en": ["4 states: loading, empty, error, success", "features/ on the frontend"]
+        "es": ["4 estados de UI", "Carpeta features/"],
+        "en": ["4 UI states", "features/ folder"]
       },
       "archivos_tipicos": ["frontend/src/features/"],
       "depende_de": ["layered_api"],
       "agent_recomendado": "implementer",
       "model_recomendado": { "learn": "haiku", "implement": "sonnet" },
       "prompt_learn": {
-        "es": "Explícame el patrón de 4 estados en el frontend de esta plantilla.",
-        "en": "Explain the 4-state pattern on this template's frontend."
+        "es": "Explícame el patrón de 4 estados del frontend.",
+        "en": "Explain the 4-state frontend pattern."
       },
       "prompt_implement": {
-        "es": "Mejora una pantalla de feature con los 4 estados y textos claros en español.",
-        "en": "Improve a feature screen with the 4 states and clear English copy."
+        "es": "Mejora una pantalla con los 4 estados y textos claros.",
+        "en": "Improve a screen with the 4 states and clear copy."
       },
       "criterio_de_hecho": {
-        "es": ["La lista muestra datos", "Hay estado vacío y de error"],
-        "en": ["The list shows data", "Empty and error states exist"]
+        "es": ["La lista muestra datos", "Hay vacío y error"],
+        "en": ["List shows data", "Empty and error exist"]
       },
       "probar_en_local": {
-        "es": ["Abre la pantalla en el navegador", "Prueba sin datos y con error de red"],
-        "en": ["Open the screen in the browser", "Try with no data and a network error"]
+        "es": ["Abre la pantalla", "Prueba sin datos"],
+        "en": ["Open the screen", "Try with no data"]
+      },
+      "mentalidad_senior": {
+        "es": ["Nunca dejes una pantalla en blanco sin mensaje", "data-testid ayudan a QA"],
+        "en": ["Never leave a blank screen", "data-testid help QA"]
       },
       "publicar_pista": {
-        "es": "El frontend se publica aparte (Vercel/Netlify) apuntando a la API.",
-        "en": "Frontend ships separately (Vercel/Netlify) pointing at the API."
+        "es": "Frontend en Vercel/Netlify apuntando a la API.",
+        "en": "Frontend on Vercel/Netlify pointing at the API."
       }
     },
     {
@@ -197,29 +344,55 @@
         "es": "Quién puede ver o cambiar cada dato.",
         "en": "Who can view or change each piece of data."
       },
+      "guia": {
+        "es": [
+          {
+            "titulo": "1. Roles",
+            "texto": "admin puede más que usuario. El servidor siempre decide; el menú del front solo oculta botones."
+          },
+          {
+            "titulo": "2. Ownership",
+            "texto": "A veces un usuario solo edita lo suyo (created_by). Eso se comprueba en el service, no solo en React."
+          }
+        ],
+        "en": [
+          {
+            "titulo": "1. Roles",
+            "texto": "Admin can do more than user. Server always decides."
+          },
+          {
+            "titulo": "2. Ownership",
+            "texto": "Often a user may only edit their own rows (created_by)."
+          }
+        ]
+      },
       "que_aprenderas": {
-        "es": ["Roles admin/user", "Ownership de recursos"],
-        "en": ["Admin/user roles", "Resource ownership"]
+        "es": ["Roles admin/user", "Ownership"],
+        "en": ["Admin/user roles", "Ownership"]
       },
       "archivos_tipicos": ["backend/core/security.py", "backend/services/"],
       "depende_de": ["auth", "layered_api"],
       "agent_recomendado": "implementer",
       "model_recomendado": { "learn": "sonnet", "implement": "sonnet" },
       "prompt_learn": {
-        "es": "Explícame permisos y ownership en esta plantilla, con ejemplos simples.",
-        "en": "Explain permissions and ownership in this template with simple examples."
+        "es": "Explícame permisos y ownership con ejemplos simples.",
+        "en": "Explain permissions and ownership with simple examples."
       },
       "prompt_implement": {
-        "es": "Asegura que un usuario no admin no pueda hacer acciones de admin. Reporta pruebas.",
-        "en": "Ensure a non-admin user cannot perform admin actions. Report tests."
+        "es": "Asegura que un no-admin no haga acciones de admin.",
+        "en": "Ensure non-admin cannot perform admin actions."
       },
       "criterio_de_hecho": {
         "es": ["User recibe 403 en ruta admin", "Admin puede acceder"],
         "en": ["User gets 403 on admin route", "Admin can access"]
       },
       "probar_en_local": {
-        "es": ["Login como user y como admin", "Compara respuestas"],
-        "en": ["Sign in as user and as admin", "Compare responses"]
+        "es": ["Login como user y admin", "Compara respuestas"],
+        "en": ["Sign in as user and admin", "Compare responses"]
+      },
+      "mentalidad_senior": {
+        "es": ["Deny by default", "Prueba siempre con el rol más débil"],
+        "en": ["Deny by default", "Always test with the weakest role"]
       },
       "publicar_pista": {
         "es": "Nunca confíes solo en el frontend para permisos.",
@@ -230,72 +403,129 @@
       "id": "pagos_wompi",
       "titulo": { "es": "Pagos (opcional)", "en": "Payments (optional)" },
       "para_que": {
-        "es": "Cobrar en Colombia con Wompi cuando el negocio lo necesite.",
-        "en": "Charge in Colombia with Wompi when the business needs it."
+        "es": "Cobrar en Colombia con Wompi cuando haga falta.",
+        "en": "Charge in Colombia with Wompi when needed."
+      },
+      "guia": {
+        "es": [
+          {
+            "titulo": "1. Módulo opcional",
+            "texto": "PAYMENTS_ENABLED en .env activa el módulo. Sin eso, la app funciona igual sin pagos."
+          },
+          {
+            "titulo": "2. Seguridad",
+            "texto": "Las claves Wompi nunca van en el código ni en GitHub. Solo variables de entorno del hosting."
+          }
+        ],
+        "en": [
+          {
+            "titulo": "1. Optional module",
+            "texto": "PAYMENTS_ENABLED turns payments on. Without it, the app still works."
+          },
+          {
+            "titulo": "2. Security",
+            "texto": "Wompi keys never in source or GitHub—only host env vars."
+          }
+        ]
       },
       "que_aprenderas": {
-        "es": ["Pagos como módulo opcional", "Webhooks e idempotencia (idea)"],
-        "en": ["Payments as an optional module", "Webhooks and idempotency (idea)"]
+        "es": ["Pagos opcionales", "Idea de webhooks"],
+        "en": ["Optional payments", "Webhook idea"]
       },
       "archivos_tipicos": ["backend/payments/"],
       "depende_de": ["ownership"],
       "agent_recomendado": "implementer",
       "model_recomendado": { "learn": "sonnet", "implement": "opus" },
       "prompt_learn": {
-        "es": "Explícame cómo está pensado el módulo de pagos Wompi en esta plantilla, sin secretos.",
-        "en": "Explain how the Wompi payments module is designed in this template, without secrets."
+        "es": "Explícame el módulo Wompi de esta plantilla, sin secretos.",
+        "en": "Explain the Wompi module without secrets."
       },
       "prompt_implement": {
-        "es": "Documenta o mejora un flujo de pago de prueba sin exponer claves. Solo módulo payments.",
-        "en": "Document or improve a test payment flow without exposing keys. Payments module only."
+        "es": "Documenta o mejora un flujo de pago de prueba sin exponer claves.",
+        "en": "Document or improve a test payment flow without exposing keys."
       },
       "criterio_de_hecho": {
-        "es": ["PAYMENTS_ENABLED se entiende", "No hay claves en el código"],
-        "en": ["PAYMENTS_ENABLED is clear", "No keys in source code"]
+        "es": ["Se entiende PAYMENTS_ENABLED", "No hay claves en el código"],
+        "en": ["PAYMENTS_ENABLED is clear", "No keys in source"]
       },
       "probar_en_local": {
-        "es": ["Revisa .env.example de pagos", "No subas claves a GitHub"],
-        "en": ["Review payments .env.example", "Do not push keys to GitHub"]
+        "es": ["Revisa .env.example de pagos", "No subas claves a Git"],
+        "en": ["Review payments .env.example", "Do not commit keys"]
+      },
+      "mentalidad_senior": {
+        "es": ["Idempotencia en webhooks", "Prueba en sandbox antes de producción"],
+        "en": ["Webhook idempotency", "Sandbox before production"]
       },
       "publicar_pista": {
-        "es": "Claves Wompi solo en variables del hosting.",
-        "en": "Wompi keys only in host environment variables."
+        "es": "Claves Wompi solo en el hosting.",
+        "en": "Wompi keys only on the host."
       }
     },
     {
       "id": "capacitor_apk",
       "titulo": { "es": "App celular (opcional)", "en": "Mobile app (optional)" },
       "para_que": {
-        "es": "Empaquetar la app para Android con Capacitor.",
-        "en": "Package the app for Android with Capacitor."
+        "es": "Empaquetar la web en Android con Capacitor.",
+        "en": "Package the web app for Android with Capacitor."
+      },
+      "guia": {
+        "es": [
+          {
+            "titulo": "1. Idea",
+            "texto": "Capacitor envuelve tu frontend en un contenedor nativo. Primero debe funcionar bien en el navegador."
+          },
+          {
+            "titulo": "2. Orden recomendado",
+            "items": [
+              "npm run build en frontend",
+              "npx cap sync",
+              "Abrir Android Studio",
+              "Probar en emulador o dispositivo"
+            ]
+          }
+        ],
+        "en": [
+          {
+            "titulo": "1. Idea",
+            "texto": "Capacitor wraps your frontend in a native shell. Browser first."
+          },
+          {
+            "titulo": "2. Order",
+            "items": ["npm run build", "npx cap sync", "Android Studio", "Emulator or device"]
+          }
+        ]
       },
       "que_aprenderas": {
         "es": ["Qué es Capacitor", "Probar en navegador antes que en el teléfono"],
-        "en": ["What Capacitor is", "Test in the browser before the phone"]
+        "en": ["What Capacitor is", "Browser before phone"]
       },
       "archivos_tipicos": ["frontend/capacitor.config.*", "frontend/android/"],
       "depende_de": ["ui_feature"],
       "agent_recomendado": "mobile",
       "model_recomendado": { "learn": "haiku", "implement": "sonnet" },
       "prompt_learn": {
-        "es": "Explícame cómo pasar de la web de esta plantilla a APK con Capacitor, paso a paso.",
-        "en": "Explain step by step how to go from this template's web app to an APK with Capacitor."
+        "es": "Explícame paso a paso web → APK con Capacitor en esta plantilla.",
+        "en": "Explain web → APK with Capacitor step by step."
       },
       "prompt_implement": {
-        "es": "Ajusta config de Capacitor (splash/icon/version) sin romper el build web.",
-        "en": "Adjust Capacitor config (splash/icon/version) without breaking the web build."
+        "es": "Ajusta config Capacitor (splash/icon/version) sin romper el build web.",
+        "en": "Adjust Capacitor config without breaking the web build."
       },
       "criterio_de_hecho": {
-        "es": ["Config de Capacitor existe", "La guía de build está clara"],
+        "es": ["Config Capacitor existe", "Guía de build clara"],
         "en": ["Capacitor config exists", "Build guide is clear"]
       },
       "probar_en_local": {
-        "es": ["npm run build en frontend", "Sigue la doc de Capacitor"],
-        "en": ["npm run build in frontend", "Follow Capacitor docs"]
+        "es": ["npm run build", "Sigue docs de Capacitor"],
+        "en": ["npm run build", "Follow Capacitor docs"]
+      },
+      "mentalidad_senior": {
+        "es": ["API publicada antes de dispositivo real", "Misma URL de API en .env de la app"],
+        "en": ["Publish API before real device", "Same API URL in app env"]
       },
       "publicar_pista": {
-        "es": "La API debe estar publicada antes de probar en dispositivo real.",
-        "en": "The API must be published before testing on a real device."
+        "es": "API en la nube antes de probar en el teléfono.",
+        "en": "Cloud API before testing on a phone."
       }
     }
   ]
