@@ -1,6 +1,6 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { fetchBuilds, fetchBlueprint, fetchBlueprintProgress, estimateBuild, createBuild } from "./api";
+import { fetchBuilds, fetchBlueprint, fetchBlueprintProgress, estimateBuild } from "./api";
 import { getApiError } from "@/lib/api";
 import { BudgetWidget } from "./components/BudgetWidget";
 import { BuildProgress } from "./components/BuildProgress";
@@ -8,6 +8,7 @@ import { BuildHistoryTable } from "./components/BuildHistoryTable";
 import { BlueprintMap } from "./components/BlueprintMap";
 import { StepPanel } from "./components/StepPanel";
 import { EstimatePanel } from "./components/EstimatePanel";
+import { ClaudeConnector } from "./components/ClaudeConnector";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -29,6 +30,8 @@ export default function BuildsPage() {
   const [estimating, setEstimating] = useState(false);
   const [estimate, setEstimate] = useState(null);
   const [budget, setBudget] = useState(null);
+  const [llmStatus, setLlmStatus] = useState(null);
+  const [preferredModel, setPreferredModel] = useState("sonnet");
 
   const switchLocale = (next) => {
     const v = setLocale(next);
@@ -90,6 +93,11 @@ export default function BuildsPage() {
     }));
   }, [blueprint, progress]);
 
+  const resolveModel = () =>
+    preferredModel ||
+    selectedStep?.model_recomendado?.[mode] ||
+    "sonnet";
+
   const applyStep = (step, nextMode) => {
     setSelectedStepId(step.id);
     setMode(nextMode);
@@ -104,7 +112,7 @@ export default function BuildsPage() {
   const handleEstimate = async () => {
     const trimmed = prompt.trim();
     if (trimmed.length < 15) {
-      toast.error(locale === "en" ? "Write a longer prompt" : "Escribe un prompt mÃ¡s largo");
+      toast.error(locale === "en" ? "Write a longer prompt" : "Escribe un prompt mas largo");
       return;
     }
     setEstimating(true);
@@ -115,7 +123,7 @@ export default function BuildsPage() {
         blueprint_step_id: selectedStepId || undefined,
         mode,
         locale,
-        model: selectedStep?.model_recomendado?.[mode] || undefined,
+        model: resolveModel(),
         agent: selectedStep?.agent_recomendado || undefined,
       });
       setEstimate(data);
@@ -137,6 +145,11 @@ export default function BuildsPage() {
     bumpRefresh();
   };
 
+  const handleLlmStatus = (data) => {
+    setLlmStatus(data);
+    if (data?.preferred_model) setPreferredModel(data.preferred_model);
+  };
+
   return (
     <div className="mx-auto max-w-6xl space-y-6" data-testid="builds-page">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -145,7 +158,7 @@ export default function BuildsPage() {
           <p className="mt-1 text-sm text-muted-foreground">{t(locale, "hero_sub")}</p>
           {blueprint && (
             <p className="mt-2 text-xs text-muted-foreground">
-              {blueprint.titulo} Â· v{blueprint.version}
+              {blueprint.titulo} · v{blueprint.version}
             </p>
           )}
         </div>
@@ -168,6 +181,8 @@ export default function BuildsPage() {
           </Button>
         </div>
       </div>
+
+      <ClaudeConnector locale={locale} onStatusChange={handleLlmStatus} />
 
       <BudgetWidget refreshKey={refreshTick} onBudgetChange={setBudget} />
 
@@ -209,6 +224,12 @@ export default function BuildsPage() {
               <div className="mb-2 flex flex-wrap gap-2 text-xs">
                 <span className="rounded border px-2 py-0.5">{t(locale, mode === "learn" ? "mode_learn" : "mode_implement")}</span>
                 {selectedStepId && <span className="rounded border px-2 py-0.5 font-mono">{selectedStepId}</span>}
+                <span className="rounded border px-2 py-0.5 font-mono">{resolveModel()}</span>
+                {llmStatus && !llmStatus.connected && (
+                  <span className="rounded border border-amber-500/40 px-2 py-0.5 text-amber-400">
+                    stub
+                  </span>
+                )}
               </div>
               <Label htmlFor="build-prompt" className="text-xs uppercase tracking-[0.2em]">
                 {t(locale, "prompt_label")}
@@ -240,7 +261,7 @@ export default function BuildsPage() {
                       mode,
                       locale,
                       agent: selectedStep?.agent_recomendado,
-                      model: selectedStep?.model_recomendado?.[mode],
+                      model: resolveModel(),
                     }}
                   />
                 </div>
