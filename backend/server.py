@@ -98,8 +98,6 @@ async def security_headers(request: Request, call_next):
 
 
 app.include_router(auth.router, prefix="/api")
-# Plantilla de referencia: duplica routers/items.py -> services -> repositories -> models
-# para cada nueva entidad de negocio. Ver docs/COMO-USAR-PLANTILLA.md.
 app.include_router(items.router, prefix="/api")
 
 if PAYMENTS_ENABLED:
@@ -119,6 +117,7 @@ if BUILDS_ENABLED:
     from builds.config import validate_builds_config
     from builds.errors import BuildHTTPException, build_error_response
     from builds.routers.builds import router as builds_router
+    from builds.routers.blueprints import router as blueprints_router
 
     validate_builds_config()
 
@@ -130,6 +129,7 @@ if BUILDS_ENABLED:
         )
 
     app.include_router(builds_router, prefix="/api")
+    app.include_router(blueprints_router, prefix="/api")
 
 
 @app.get("/api/health")
