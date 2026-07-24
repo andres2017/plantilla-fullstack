@@ -50,3 +50,7 @@ credentials.json
 *.keystore
 frontend/android/keystore.properties
 frontend/android/**/keystore.properties
+
+backend/build-extraido/
+backend/build-prueba.zip
+*.zip
