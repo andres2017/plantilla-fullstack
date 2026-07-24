@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { fetchBuilds, fetchBlueprint, fetchBlueprintProgress, estimateBuild, createBuild } from "./api";
 import { getApiError } from "@/lib/api";
 import { BudgetWidget } from "./components/BudgetWidget";
-import { QueueProgressCard } from "./components/QueueProgressCard";
+import { BuildProgress } from "./components/BuildProgress";
 import { BuildHistoryTable } from "./components/BuildHistoryTable";
 import { BlueprintMap } from "./components/BlueprintMap";
 import { StepPanel } from "./components/StepPanel";
@@ -104,7 +104,7 @@ export default function BuildsPage() {
   const handleEstimate = async () => {
     const trimmed = prompt.trim();
     if (trimmed.length < 15) {
-      toast.error(locale === "en" ? "Write a longer prompt" : "Escribe un prompt más largo");
+      toast.error(locale === "en" ? "Write a longer prompt" : "Escribe un prompt mÃ¡s largo");
       return;
     }
     setEstimating(true);
@@ -145,7 +145,7 @@ export default function BuildsPage() {
           <p className="mt-1 text-sm text-muted-foreground">{t(locale, "hero_sub")}</p>
           {blueprint && (
             <p className="mt-2 text-xs text-muted-foreground">
-              {blueprint.titulo} · v{blueprint.version}
+              {blueprint.titulo} Â· v{blueprint.version}
             </p>
           )}
         </div>
@@ -249,7 +249,7 @@ export default function BuildsPage() {
           )}
 
           {activeBuildId && (
-            <QueueProgressCard buildId={activeBuildId} onFinished={handleBuildFinished} />
+            <BuildProgress buildId={activeBuildId} onFinished={handleBuildFinished} />
           )}
         </div>
       </div>

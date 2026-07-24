@@ -60,6 +60,9 @@ export const BudgetWidget = ({ refreshKey = 0, onBudgetChange }) => {
   const totalCommitted = Number(spent_usd || 0) + Number(committed_usd || 0);
   const pct = cap_usd > 0 ? Math.min(100, (totalCommitted / cap_usd) * 100) : 0;
   const overBudget = totalCommitted >= cap_usd;
+  // No alcanza ni para un build mas al tope por build: avisar antes de que
+  // el admin escriba un prompt y descubra el bloqueo recien en EstimatePanel.
+  const lowBudget = !overBudget && Number(remaining_usd || 0) < Number(per_build_cap_usd || 0);
 
   return (
     <div className="border border-border bg-card p-5" data-testid="budget-widget-success">
@@ -73,7 +76,7 @@ export const BudgetWidget = ({ refreshKey = 0, onBudgetChange }) => {
 
       <Progress
         value={pct}
-        className={overBudget ? "mt-4 [&>div]:bg-[#FF2A2A]" : "mt-4"}
+        className={overBudget || lowBudget ? "mt-4 [&>div]:bg-[#FF2A2A]" : "mt-4"}
         aria-label={`Presupuesto usado: ${pct.toFixed(0)}% de ${fmtUsd(cap_usd)}`}
         data-testid="budget-progress-bar"
       />
@@ -85,6 +88,15 @@ export const BudgetWidget = ({ refreshKey = 0, onBudgetChange }) => {
         <span data-testid="budget-cap">Tope diario: {fmtUsd(cap_usd)}</span>
         <span data-testid="budget-per-build-cap">Tope por build: {fmtUsd(per_build_cap_usd)}</span>
       </div>
+
+      {(overBudget || lowBudget) && (
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-[#FF2A2A]" data-testid="budget-low-warning">
+          <WarningCircle size={14} />
+          {overBudget
+            ? "El presupuesto diario ya se agotó. Los builds nuevos van a quedar bloqueados hasta mañana."
+            : "Queda poco presupuesto — puede no alcanzar para otro build al tope máximo."}
+        </p>
+      )}
     </div>
   );
 };

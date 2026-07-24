@@ -137,7 +137,13 @@ async def run_agent_build(build: dict) -> None:
 
     await repo.update_build(build_id, status="running", started_at=now)
     await publish(build_id, "status", {"status": "running", "queue_position": None})
-    await _emit_progress(build_id, "Worker tomó el build — modo AGENT SDK")
+    await _emit_progress(
+        build_id,
+        f"Worker tomó el build — modo AGENT SDK "
+        f"(tipo={build.get('template_type') or 'full_stack'}, "
+        f"agente={build.get('agent') or 'implementer'}, "
+        f"modelo={build.get('model') or 'sonnet'})",
+    )
 
     async def on_progress(msg: str):
         await _emit_progress(build_id, msg)
@@ -152,6 +158,9 @@ async def run_agent_build(build: dict) -> None:
             prompt=build.get("prompt") or "",
             on_progress=on_progress,
             is_cancelled=is_cancelled,
+            template_type=build.get("template_type") or "full_stack",
+            agent=build.get("agent") or "implementer",
+            model=build.get("model") or "sonnet",
         )
     except RuntimeError as exc:
         if str(exc) == "CANCELLED":
@@ -188,8 +197,13 @@ async def _process_build(build: dict) -> None:
 
 
 async def _worker_loop(stop: asyncio.Event) -> None:
-    mode = "AGENT SDK" if agent_mode_enabled() else "STUB"
-    logger.info("Worker de builds iniciado (modo %s)", mode)
+    agent_mode = agent_mode_enabled()
+    mode = "AGENT SDK" if agent_mode else "STUB"
+    if agent_mode:
+        loop_class = type(asyncio.get_running_loop()).__name__
+        logger.info("Worker de builds iniciado (modo %s, event loop=%s)", mode, loop_class)
+    else:
+        logger.info("Worker de builds iniciado (modo %s)", mode)
     while not stop.is_set():
         try:
             build = await _next_queued_build()

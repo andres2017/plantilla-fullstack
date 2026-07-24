@@ -1,5 +1,5 @@
 // Badge de estado de build — mismo patron que features/items/components/ActiveBadge.jsx
-// (mapa status -> clases Tailwind), reutilizado entre QueueProgressCard y BuildHistoryTable.
+// (mapa status -> clases Tailwind), reutilizado entre BuildProgress y BuildHistoryTable.
 const STATUS_CONFIG = {
   queued: { label: "en cola", className: "text-muted-foreground border-border bg-secondary" },
   running: { label: "ejecutando", className: "text-[#4D7CFF] border-[#4D7CFF]/40 bg-[#4D7CFF]/10" },

@@ -25,6 +25,7 @@ from builds.config import (
     BUILDS_TIMEOUT_SECONDS,
     BUILDS_WORK_ROOT,
     BUILDS_TEMPLATE_ROOT,
+    BUILDS_MODEL_MAP,
 )
 
 logger = logging.getLogger("builds.agent_runner")
@@ -61,6 +62,74 @@ Reglas obligatorias:
 7. Al terminar, deja el codigo listo para correr (imports, rutas registradas si aplica).
 
 Trabaja solo dentro del directorio de trabajo actual."""
+
+# Addendum por tipo de entrega: que parte de la plantilla tocar y que no.
+# Se concatena al system prompt base segun el template_type elegido en la UI.
+_TEMPLATE_ADDENDA = {
+    "full_stack": (
+        "\n\nAlcance: App Full Stack. Podes tocar backend/ (routers, services, "
+        "repositories, models) Y frontend/src/features/ segun lo que pida el "
+        "prompt, siguiendo el patron de features/items/ como referencia."
+    ),
+    "web_landing": (
+        "\n\nAlcance: Pagina web / Landing. Enfocate en frontend/src/ (una o "
+        "pocas paginas/secciones, componentes de presentacion). Solo toca "
+        "backend/ si el prompt pide explicitamente un endpoint nuevo para esa "
+        "pagina — no agregues autenticacion ni modulos de negocio nuevos."
+    ),
+    "mobile_apk": (
+        "\n\nAlcance: App movil (Capacitor/Android). Enfocate en la config de "
+        "Capacitor (capacitor.config.*, android/) y en ajustes de frontend/src/ "
+        "necesarios para que la app empaquetada funcione bien (splash, iconos, "
+        "rutas). No toques backend/ salvo que el prompt lo pida explicitamente."
+    ),
+    "backend_only": (
+        "\n\nAlcance: Solo API. Toca unicamente backend/ (routers → services → "
+        "repositories → models). No modifiques nada bajo frontend/."
+    ),
+    "custom": (
+        "\n\nAlcance: libre/avanzado. No hay restriccion de carpetas fijada de "
+        "antemano — segui exactamente el alcance que describe el prompt del "
+        "usuario, ni mas ni menos."
+    ),
+}
+
+# Addendum por rol de agente: mismo system prompt base, distinto foco/limite.
+_AGENT_ADDENDA = {
+    "architect": (
+        "\n\nRol: arquitecto. Disena la estructura (modelos de datos, "
+        "contratos de API, mapa de archivos) y dejala documentada en comentarios "
+        "o en un archivo de notas. Escribi poco codigo de implementacion — "
+        "priorizá dejar claro el plan sobre construir la feature completa."
+    ),
+    "implementer": "",  # default: sin addendum, ya es el rol base del system prompt
+    "reviewer": (
+        "\n\nRol: revisor. NO agregues features nuevas. Revisa el codigo "
+        "existente en el alcance indicado, corrige bugs, mejora claridad y "
+        "aplica refactors seguros manteniendo el comportamiento actual."
+    ),
+    "mobile": (
+        "\n\nRol: movil. Prioriza cambios en la capa Capacitor/Android "
+        "(capacitor.config.*, android/, permisos, splash/iconos) sobre "
+        "cambios de backend o de paginas web de escritorio."
+    ),
+    "docs": (
+        "\n\nRol: documentacion. Prioriza README, docs/DECISIONS.md y "
+        "comentarios claros sobre el porque de decisiones no obvias. Cambios "
+        "de codigo solo si son necesarios para que la documentacion sea "
+        "precisa (ej. corregir un ejemplo que ya no compila)."
+    ),
+}
+
+
+def _build_system_prompt(template_type: str, agent: str) -> str:
+    addendum = _TEMPLATE_ADDENDA.get(template_type, "")
+    role = _AGENT_ADDENDA.get(agent, "")
+    return _SYSTEM_PROMPT + addendum + role
+
+
+def _resolve_model(model: str) -> str:
+    return BUILDS_MODEL_MAP.get(model, BUILDS_MODEL_MAP["sonnet"])
 
 
 def _repo_root() -> Path:
@@ -157,11 +226,42 @@ def _message_to_progress(msg) -> str | None:
     return None
 
 
+async def _assert_subprocess_capable() -> None:
+    """Prueba real de que el loop activo puede spawnear subprocesos, en vez
+    de inferirlo por el nombre de la clase del loop (isinstance contra
+    ProactorEventLoop da falsos negativos/positivos si el loop esta envuelto
+    o si el chequeo corre antes de que el loop este completamente listo).
+    En Windows, SelectorEventLoop no soporta subprocesos y el Agent SDK
+    necesita spawnear el CLI `claude`. Ver docs/BUILDS.md."""
+    if sys.platform != "win32":
+        return
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-c", "pass",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.wait()
+    except NotImplementedError as e:
+        raise RuntimeError(
+            "WINDOWS_EVENTLOOP: el loop activo no soporta subprocesos en Windows "
+            "(NotImplementedError al probar asyncio.create_subprocess_exec). Causa "
+            "tipica: uvicorn con --reload en Windows fuerza SelectorEventLoop, o "
+            "quedo un proceso viejo con --reload todavia escuchando en el puerto. "
+            "Solucion: usa backend/start-backend-agent.ps1 (corre sin --reload, "
+            "fuerza WindowsProactorEventLoopPolicy) y verifica que no haya otro "
+            "proceso uvicorn viejo con el mismo puerto."
+        ) from e
+
+
 async def run_agent_build(
     build_id: str,
     prompt: str,
     on_progress: ProgressCb,
     is_cancelled: IsCancelledCb,
+    template_type: str = "full_stack",
+    agent: str = "implementer",
+    model: str = "sonnet",
 ) -> dict:
     """
     Corre el Agent SDK y retorna:
@@ -171,18 +271,7 @@ async def run_agent_build(
     if not ANTHROPIC_API_KEY:
         raise RuntimeError("ANTHROPIC_API_KEY requerida para el Agent SDK real")
 
-    if sys.platform == "win32" and not isinstance(asyncio.get_event_loop(), asyncio.ProactorEventLoop):
-        # uvicorn --reload en Windows fuerza SelectorEventLoop en el proceso hijo
-        # real (uvicorn/config.py: use_subprocess=True con --reload), y ese loop
-        # no soporta subprocesos: el Agent SDK falla al spawnear el CLI `claude`
-        # con un NotImplementedError sin mensaje ("Failed to start Claude Code: ").
-        raise RuntimeError(
-            "WINDOWS_EVENTLOOP: el servidor corre bajo SelectorEventLoop, que no "
-            "soporta subprocesos en Windows (requerido para lanzar el CLI de Claude "
-            "Code). Causa tipica: uvicorn con --reload en Windows. Solucion: corre "
-            "uvicorn con '--loop none' (usa el ProactorEventLoop por defecto), o "
-            "quita --reload al probar builds en modo agente."
-        )
+    await _assert_subprocess_capable()
 
     work_dir = Path(BUILDS_WORK_ROOT) / build_id
     zip_path = work_dir / f"build-{build_id}.zip"
@@ -216,7 +305,8 @@ async def run_agent_build(
         max_budget_usd=BUILDS_PER_BUILD_CAP_USD,
         permission_mode="acceptEdits",
         env=agent_env,
-        system_prompt=_SYSTEM_PROMPT,
+        system_prompt=_build_system_prompt(template_type, agent),
+        model=_resolve_model(model),
         setting_sources=[],  # no cargar ~/.claude ni settings del host
     )
 
