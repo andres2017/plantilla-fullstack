@@ -1,10 +1,4 @@
-// Panel que aparece tras estimar (POST /builds/estimate). Explica el costo,
-// tokens y size_bucket; si within_budget es false, explica exactamente por
-// que (tope por build vs presupuesto diario restante) y deshabilita el boton
-// de confirmar. Cada click de "Confirmar y ejecutar" cuesta dinero real, asi
-// que pasa por un AlertDialog de confirmacion explicita — el backend vuelve a
-// validar el presupuesto server-side de todas formas (este disable es UX).
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { RocketLaunch, WarningCircle } from "@phosphor-icons/react";
 import { createBuild } from "../api";
@@ -24,30 +18,45 @@ import {
 
 const fmtUsd = (v) => `$${Number(v ?? 0).toFixed(4)}`;
 
-const BUCKET_LABELS = { pequeño: "Pequeño", pequeno: "Pequeño", mediano: "Mediano", grande: "Grande" };
-
-export const EstimatePanel = ({ estimate, prompt, onBuildCreated }) => {
+export const EstimatePanel = ({
+  estimate,
+  prompt,
+  onBuildCreated,
+  budget = null,
+  createPayload = {},
+}) => {
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  const {
-    size_bucket,
-    estimated_input_tokens,
-    estimated_output_tokens,
-    estimated_cost_usd,
-    per_build_cap_usd,
-    within_per_build_cap,
-    daily_spent_usd,
-    daily_cap_usd,
-    daily_remaining_usd,
-    within_daily_budget,
-    within_budget,
-  } = estimate;
+  const estimated_cost_usd = estimate?.estimated_cost_usd ?? 0;
+  const inputTok = estimate?.input_tokens_est ?? estimate?.estimated_input_tokens;
+  const outputTok = estimate?.output_tokens_est ?? estimate?.estimated_output_tokens;
+
+  const caps = useMemo(() => {
+    const perBuild = Number(budget?.per_build_cap_usd ?? 0.5);
+    const remaining = Number(budget?.remaining_usd ?? 20);
+    const spent = Number(budget?.spent_usd ?? 0);
+    const cap = Number(budget?.cap_usd ?? 20);
+    const withinPer = estimated_cost_usd <= perBuild + 1e-9;
+    const withinDaily = estimated_cost_usd <= remaining + 1e-9;
+    return {
+      per_build_cap_usd: perBuild,
+      daily_remaining_usd: remaining,
+      daily_spent_usd: spent,
+      daily_cap_usd: cap,
+      within_per_build_cap: withinPer,
+      within_daily_budget: withinDaily,
+      within_budget: withinPer && withinDaily,
+    };
+  }, [budget, estimated_cost_usd]);
 
   const handleConfirm = async () => {
     setCreating(true);
     try {
-      const build = await createBuild(prompt);
+      const build = await createBuild({
+        prompt,
+        ...createPayload,
+      });
       toast.success("Build encolado. Sigue el progreso en vivo abajo.");
       setOpen(false);
       onBuildCreated(build);
@@ -70,60 +79,52 @@ export const EstimatePanel = ({ estimate, prompt, onBuildCreated }) => {
           </dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">Tamaño</dt>
-          <dd className="text-sm text-foreground" data-testid="estimate-bucket">
-            {BUCKET_LABELS[size_bucket] || size_bucket}
-          </dd>
-        </div>
-        <div>
           <dt className="text-muted-foreground">Tokens (entrada / salida)</dt>
           <dd className="text-sm text-foreground" data-testid="estimate-tokens">
-            {estimated_input_tokens} / {estimated_output_tokens}
+            {inputTok ?? "—"} / {outputTok ?? "—"}
           </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">Tope por build</dt>
-          <dd className="text-sm text-foreground">{fmtUsd(per_build_cap_usd)}</dd>
+          <dd className="text-sm text-foreground">{fmtUsd(caps.per_build_cap_usd)}</dd>
         </div>
         <div>
           <dt className="text-muted-foreground">Disponible hoy</dt>
-          <dd className="text-sm text-foreground">{fmtUsd(daily_remaining_usd)}</dd>
+          <dd className="text-sm text-foreground">{fmtUsd(caps.daily_remaining_usd)}</dd>
         </div>
         <div>
           <dt className="text-muted-foreground">Gastado hoy / tope diario</dt>
           <dd className="text-sm text-foreground">
-            {fmtUsd(daily_spent_usd)} / {fmtUsd(daily_cap_usd)}
+            {fmtUsd(caps.daily_spent_usd)} / {fmtUsd(caps.daily_cap_usd)}
           </dd>
         </div>
       </dl>
 
-      {!within_budget && (
+      {!caps.within_budget && (
         <div
           className="mt-4 flex items-start gap-2 border-l-2 border-[#FF2A2A] bg-[#FF2A2A]/5 p-3"
           data-testid="estimate-budget-warning"
         >
           <WarningCircle size={18} className="mt-0.5 shrink-0 text-[#FF2A2A]" />
           <div className="text-xs text-muted-foreground">
-            {!within_per_build_cap && (
+            {!caps.within_per_build_cap && (
               <p>
-                El costo estimado ({fmtUsd(estimated_cost_usd)}) supera el tope máximo por build (
-                {fmtUsd(per_build_cap_usd)}).
+                El costo estimado ({fmtUsd(estimated_cost_usd)}) supera el tope por build (
+                {fmtUsd(caps.per_build_cap_usd)}).
               </p>
             )}
-            {!within_daily_budget && (
+            {!caps.within_daily_budget && (
               <p>
-                El presupuesto diario restante ({fmtUsd(daily_remaining_usd)} de {fmtUsd(daily_cap_usd)}) no alcanza
-                para este build.
+                El presupuesto diario restante ({fmtUsd(caps.daily_remaining_usd)}) no alcanza para este build.
               </p>
             )}
-            <p className="mt-1 text-foreground">Reduce el alcance del prompt o espera a que se libere presupuesto.</p>
           </div>
         </div>
       )}
 
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogTrigger asChild>
-          <Button className="mt-4 gap-2" disabled={!within_budget} data-testid="confirm-build-button">
+          <Button className="mt-4 gap-2" disabled={!caps.within_budget} data-testid="confirm-build-button">
             <RocketLaunch size={16} weight="bold" /> Confirmar y ejecutar
           </Button>
         </AlertDialogTrigger>
@@ -131,17 +132,13 @@ export const EstimatePanel = ({ estimate, prompt, onBuildCreated }) => {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Ejecutar este build?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esto va a consumir aproximadamente {fmtUsd(estimated_cost_usd)} de la API de Anthropic contra el
-              presupuesto diario compartido. La ejecución no se puede deshacer una vez que el build empiece a correr.
+              Esto consumirá aproximadamente {fmtUsd(estimated_cost_usd)} del presupuesto del día.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel data-testid="confirm-build-cancel">Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
-                // preventDefault: AlertDialogAction cierra el dialogo apenas se
-                // hace click (envuelve Dialog.Close). Lo evitamos para poder
-                // mostrar el estado "Encolando..." y cerrar solo tras exito.
                 e.preventDefault();
                 handleConfirm();
               }}

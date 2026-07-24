@@ -1,7 +1,3 @@
-// Cabecera de /builds: barra de progreso spent_usd/cap_usd + comprometido +
-// disponible. Refresca al montar y cuando el padre bumpea `refreshKey`
-// (build creado o terminado). 3 estados aplicables (no hay "vacio" para un
-// unico objeto de presupuesto): cargando / error / exito.
 import { useCallback, useEffect, useState } from "react";
 import { ArrowClockwise, Coins, WarningCircle } from "@phosphor-icons/react";
 import { fetchBudget } from "../api";
@@ -12,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const fmtUsd = (v) => `$${Number(v ?? 0).toFixed(2)}`;
 
-export const BudgetWidget = ({ refreshKey = 0 }) => {
+export const BudgetWidget = ({ refreshKey = 0, onBudgetChange }) => {
   const [state, setState] = useState({ status: "loading", data: null, error: "" });
 
   const load = useCallback(async () => {
@@ -20,10 +16,11 @@ export const BudgetWidget = ({ refreshKey = 0 }) => {
     try {
       const data = await fetchBudget();
       setState({ status: "success", data, error: "" });
+      onBudgetChange?.(data);
     } catch (err) {
       setState({ status: "error", data: null, error: getApiError(err) });
     }
-  }, []);
+  }, [onBudgetChange]);
 
   useEffect(() => {
     load();
