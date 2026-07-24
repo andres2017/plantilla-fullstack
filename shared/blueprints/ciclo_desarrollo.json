@@ -1,0 +1,551 @@
+{
+  "id": "ciclo_desarrollo",
+  "version": "1.0.0",
+  "orden_estricto": false,
+  "titulo": {
+    "es": "Ciclo de desarrollo",
+    "en": "Development lifecycle"
+  },
+  "descripcion": {
+    "es": "El camino completo de una idea a un producto en marcha. Sirve si no programas y si ya eres developer: mismo mapa, distinto nivel de detalle.",
+    "en": "The full path from idea to a live product. Works if you don't code and if you're already a developer: same map, different depth."
+  },
+  "local_hint": {
+    "es": "Puedes recorrer las 7 fases solo leyendo (0 tokens). Cuando quieras construir código, usa la plantilla Full Stack y Claude.",
+    "en": "You can walk all 7 phases by reading only (0 tokens). When you want real code, use the Full Stack template and Claude."
+  },
+  "publish_hint": {
+    "es": "No saltes a programar sin haber cerrado ideación y un boceto mínimo de pantallas.",
+    "en": "Don't jump to coding before closing ideation and a minimal screen sketch."
+  },
+  "pasos": [
+    {
+      "id": "ideacion",
+      "titulo": { "es": "1. Ideación y alcance", "en": "1. Ideation & scope" },
+      "para_que": {
+        "es": "Fase de negocio: claridad antes de cualquier editor o línea de código.",
+        "en": "Business phase: clarity before any editor or line of code."
+      },
+      "guia": {
+        "es": [
+          {
+            "titulo": "Qué decides aquí",
+            "items": [
+              "Quién es el usuario final (1 persona concreta, no ‘todo el mundo’)",
+              "Problema que resuelves en una frase",
+              "Funciones innegociables del MVP (máximo 3–5)",
+              "Cómo opera o se monetiza (gratis, suscripción, comisión, uso interno)"
+            ]
+          },
+          {
+            "titulo": "Si no programas",
+            "texto": "Escribe esto en un documento o notas. Si no puedes explicarlo a un amigo en 2 minutos, aún no está listo."
+          },
+          {
+            "titulo": "Si ya programas",
+            "texto": "Traduce el MVP a historias de usuario y criterios de aceptación. Evita scope creep antes del primer deploy."
+          }
+        ],
+        "en": [
+          {
+            "titulo": "What you decide here",
+            "items": [
+              "Who the end user is (one concrete person, not ‘everyone’)",
+              "Problem you solve in one sentence",
+              "Non‑negotiable MVP features (max 3–5)",
+              "How it operates or makes money"
+            ]
+          },
+          {
+            "titulo": "If you don't code",
+            "texto": "Write it down. If you can't explain it to a friend in 2 minutes, it's not ready."
+          },
+          {
+            "titulo": "If you already code",
+            "texto": "Turn the MVP into user stories and acceptance criteria. Avoid scope creep before first deploy."
+          }
+        ]
+      },
+      "que_aprenderas": {
+        "es": ["Qué es un MVP", "Usuario final vs ‘todo el mundo’", "Funciones innegociables"],
+        "en": ["What an MVP is", "End user vs ‘everyone’", "Non‑negotiable features"]
+      },
+      "archivos_tipicos": ["docs/", "README.md"],
+      "depende_de": [],
+      "agent_recomendado": "architect",
+      "model_recomendado": { "learn": "haiku", "implement": "sonnet" },
+      "prompt_learn": {
+        "es": "Ayúdame a definir el MVP de mi idea: usuario, problema, 3–5 funciones y cómo opera. Solo texto, sin código.",
+        "en": "Help me define my MVP: user, problem, 3–5 features, how it operates. Text only, no code."
+      },
+      "prompt_implement": {
+        "es": "Redacta un documento corto de alcance (MVP) en docs/ basado en el brief del usuario, sin implementar features.",
+        "en": "Write a short scope (MVP) doc under docs/ from the user brief, without implementing features."
+      },
+      "criterio_de_hecho": {
+        "es": ["Puedo nombrar al usuario final", "Tengo lista de 3–5 funciones MVP", "Sé cómo se usa o se cobra"],
+        "en": ["I can name the end user", "I have a 3–5 feature MVP list", "I know how it's used or paid for"]
+      },
+      "probar_en_local": {
+        "es": ["Escribe el alcance en una página", "Léelo en voz alta a alguien"],
+        "en": ["Write the scope on one page", "Read it aloud to someone"]
+      },
+      "mentalidad_senior": {
+        "es": ["Menos features, mejor ejecutadas", "Si todo es prioritario, nada lo es"],
+        "en": ["Fewer features, better executed", "If everything is priority, nothing is"]
+      },
+      "publicar_pista": {
+        "es": "No publiques nada aún: esta fase es de decisión.",
+        "en": "Don't ship yet: this phase is decision-making."
+      }
+    },
+    {
+      "id": "ui_ux",
+      "titulo": { "es": "2. Diseño UI/UX", "en": "2. UI/UX design" },
+      "para_que": {
+        "es": "Wireframes y flujos: validar cómo se navega antes de programar.",
+        "en": "Wireframes and flows: validate navigation before coding."
+      },
+      "guia": {
+        "es": [
+          {
+            "titulo": "Qué haces",
+            "items": [
+              "Lista de pantallas del MVP (login, inicio, detalle…)",
+              "Boceto simple (papel, Figma, o cajas en un doc)",
+              "Flujo: qué pasa al tocar cada botón principal",
+              "Estados: vacío, cargando, error, éxito"
+            ]
+          },
+          {
+            "titulo": "Si no programas",
+            "texto": "Usa Figma gratis, Canva o papel. Lo importante es el orden de pantallas, no el pixel perfecto."
+          },
+          {
+            "titulo": "Si ya programas",
+            "texto": "Define rutas y componentes. En esta plantilla cada feature vive en frontend/src/features/ con 4 estados."
+          }
+        ],
+        "en": [
+          {
+            "titulo": "What you do",
+            "items": [
+              "List MVP screens",
+              "Simple sketch (paper, Figma, or boxes)",
+              "Flow: what each main button does",
+              "States: empty, loading, error, success"
+            ]
+          }
+        ]
+      },
+      "que_aprenderas": {
+        "es": ["Wireframe vs diseño final", "Flujo de usuario", "Estados de pantalla"],
+        "en": ["Wireframe vs final UI", "User flow", "Screen states"]
+      },
+      "archivos_tipicos": ["frontend/src/features/", "design_guidelines.json"],
+      "depende_de": ["ideacion"],
+      "agent_recomendado": "implementer",
+      "model_recomendado": { "learn": "haiku", "implement": "sonnet" },
+      "prompt_learn": {
+        "es": "Propón el mapa de pantallas y flujos para mi MVP, en lenguaje simple, sin código.",
+        "en": "Propose screen map and flows for my MVP in plain language, no code."
+      },
+      "prompt_implement": {
+        "es": "Documenta el mapa de pantallas del MVP en un markdown bajo docs/, alineado a features/ de la plantilla.",
+        "en": "Document the MVP screen map in markdown under docs/, aligned with template features/."
+      },
+      "criterio_de_hecho": {
+        "es": ["Tengo lista de pantallas", "Sé el flujo principal de punta a punta"],
+        "en": ["I have a screen list", "I know the main end-to-end flow"]
+      },
+      "probar_en_local": {
+        "es": ["Enseña el boceto a un usuario real", "Ajusta antes de codificar"],
+        "en": ["Show the sketch to a real user", "Adjust before coding"]
+      },
+      "mentalidad_senior": {
+        "es": ["Diseñar barato, programar caro", "Mobile-first si tu usuario va en celular"],
+        "en": ["Design is cheap, coding is expensive", "Mobile-first if users are on phones"]
+      },
+      "publicar_pista": {
+        "es": "Aún no subas a producción: valida el flujo en papel o Figma.",
+        "en": "Don't go to production yet: validate the flow on paper or Figma."
+      }
+    },
+    {
+      "id": "arquitectura",
+      "titulo": { "es": "3. Arquitectura y stack", "en": "3. Architecture & stack" },
+      "para_que": {
+        "es": "Decidir el motor: web, APK, base de datos, APIs y método (código vs low-code).",
+        "en": "Choose the engine: web, APK, database, APIs, and method (code vs low-code)."
+      },
+      "guia": {
+        "es": [
+          {
+            "titulo": "Frontend",
+            "texto": "¿Solo navegador (webapp) o también APK con Capacitor? Esta plantilla cubre ambos caminos."
+          },
+          {
+            "titulo": "Backend y datos",
+            "items": [
+              "MongoDB: flexible, documentos JSON (esta plantilla)",
+              "SQL: tablas rígidas, muy usado en bancos y ERP",
+              "Capas: router → service → repository"
+            ]
+          },
+          {
+            "titulo": "Integraciones",
+            "texto": "Pagos (Wompi), WhatsApp, facturación: cada una es un módulo con secretos solo en .env."
+          },
+          {
+            "titulo": "Método",
+            "items": [
+              "Código + GitHub: control total, curva de aprendizaje",
+              "Low-code/no-code: más rápido al inicio, menos control a largo plazo",
+              "Fábrica: plantilla + agentes para acelerar sin saltarte las fases"
+            ]
+          }
+        ],
+        "en": [
+          {
+            "titulo": "Frontend",
+            "texto": "Browser-only webapp or also APK via Capacitor? This template supports both."
+          },
+          {
+            "titulo": "Backend & data",
+            "items": [
+              "MongoDB: flexible JSON documents (this template)",
+              "SQL: rigid tables, common in banks/ERP",
+              "Layers: router → service → repository"
+            ]
+          }
+        ]
+      },
+      "que_aprenderas": {
+        "es": ["Web vs APK", "Mongo vs SQL (idea)", "Cuándo usar low-code"],
+        "en": ["Web vs APK", "Mongo vs SQL (idea)", "When to use low-code"]
+      },
+      "archivos_tipicos": ["backend/", "frontend/", "docs/API.md", "render.yaml"],
+      "depende_de": ["ideacion"],
+      "agent_recomendado": "architect",
+      "model_recomendado": { "learn": "sonnet", "implement": "sonnet" },
+      "prompt_learn": {
+        "es": "Recomienda stack (web/APK, DB, integraciones) para mi idea y por qué, sin código.",
+        "en": "Recommend stack (web/APK, DB, integrations) for my idea and why, no code."
+      },
+      "prompt_implement": {
+        "es": "Documenta en docs/ la arquitectura elegida (frontend, backend, DB, integraciones) alineada a la plantilla.",
+        "en": "Document chosen architecture in docs/ aligned with the template."
+      },
+      "criterio_de_hecho": {
+        "es": ["Sé si es web, móvil o ambos", "Elegí tipo de base de datos", "Listé integraciones externas"],
+        "en": ["I know web, mobile, or both", "I chose a database type", "I listed external integrations"]
+      },
+      "probar_en_local": {
+        "es": ["Revisa README y docs/API.md de la plantilla", "Confirma que el stack cubre el MVP"],
+        "en": ["Review README and docs/API.md", "Confirm the stack covers the MVP"]
+      },
+      "mentalidad_senior": {
+        "es": ["Elige herramientas que tu equipo pueda mantener", "No copies el stack de Netflix el día 1"],
+        "en": ["Pick tools your team can maintain", "Don't copy Netflix's stack on day 1"]
+      },
+      "publicar_pista": {
+        "es": "Anota desde ya dónde vivirían API, front y base (Render, Vercel, Atlas…).",
+        "en": "Note early where API, front and DB will live (Render, Vercel, Atlas…)."
+      }
+    },
+    {
+      "id": "construccion",
+      "titulo": { "es": "4. Construcción", "en": "4. Build & code" },
+      "para_que": {
+        "es": "Ensamblaje real: pantallas (cliente) + lógica y datos (servidor).",
+        "en": "Real assembly: screens (client) + logic and data (server)."
+      },
+      "guia": {
+        "es": [
+          {
+            "titulo": "Orden recomendado en esta plantilla",
+            "items": [
+              "Auth (puerta de entrada)",
+              "Modelo de datos",
+              "API por capas",
+              "Pantallas con 4 estados",
+              "Permisos",
+              "Pagos / móvil solo si el MVP lo exige"
+            ]
+          },
+          {
+            "titulo": "Si no programas",
+            "texto": "Usa el mapa Full Stack de la Fábrica: lee la guía gratis y pide a Claude ‘construir’ solo cuando el brief esté claro."
+          },
+          {
+            "titulo": "Si ya programas",
+            "texto": "Ramas cortas, PRs pequeños, commits en GitHub. No mezcles auth, pagos y UI en un solo cambio."
+          }
+        ],
+        "en": [
+          {
+            "titulo": "Recommended order in this template",
+            "items": [
+              "Auth",
+              "Data model",
+              "Layered API",
+              "Screens with 4 states",
+              "Permissions",
+              "Payments / mobile only if MVP needs them"
+            ]
+          }
+        ]
+      },
+      "que_aprenderas": {
+        "es": ["Cliente vs servidor", "Orden de construcción del MVP", "Git básico"],
+        "en": ["Client vs server", "MVP build order", "Basic Git"]
+      },
+      "archivos_tipicos": ["backend/", "frontend/src/features/"],
+      "depende_de": ["ui_ux", "arquitectura"],
+      "agent_recomendado": "implementer",
+      "model_recomendado": { "learn": "haiku", "implement": "sonnet" },
+      "prompt_learn": {
+        "es": "Explícame el orden de construcción full-stack para mi MVP usando esta plantilla, sin código largo.",
+        "en": "Explain full-stack build order for my MVP using this template, without long code."
+      },
+      "prompt_implement": {
+        "es": "Implementa SOLO la siguiente historia del MVP descrita en el prompt, respetando capas y 4 estados.",
+        "en": "Implement ONLY the next MVP story in the prompt, respecting layers and 4 UI states."
+      },
+      "criterio_de_hecho": {
+        "es": ["Hay algo usable en local", "Login o flujo principal funciona", "Código en un repo o zip ordenado"],
+        "en": ["Something usable runs locally", "Login or main flow works", "Code in a clean repo or zip"]
+      },
+      "probar_en_local": {
+        "es": ["Backend :8001 y frontend :3000", "Recorre el flujo MVP a mano"],
+        "en": ["Backend :8001 and frontend :3000", "Walk the MVP flow by hand"]
+      },
+      "mentalidad_senior": {
+        "es": ["Una historia a la vez", "Commits pequeños y mensajes claros"],
+        "en": ["One story at a time", "Small commits with clear messages"]
+      },
+      "publicar_pista": {
+        "es": "Sube a GitHub desde el primer feature estable, no al final.",
+        "en": "Push to GitHub from the first stable feature, not at the end."
+      }
+    },
+    {
+      "id": "pruebas",
+      "titulo": { "es": "5. Pruebas (QA)", "en": "5. Testing (QA)" },
+      "para_que": {
+        "es": "Control de calidad: que no se rompa lo esencial antes de publicar.",
+        "en": "Quality control: don't break the essentials before shipping."
+      },
+      "guia": {
+        "es": [
+          {
+            "titulo": "Checklist mínima",
+            "items": [
+              "Login y logout",
+              "Crear / listar / editar un dato clave",
+              "Ruta protegida sin sesión → 401",
+              "Pantalla en móvil y en escritorio",
+              "Mensajes de error visibles (no pantalla en blanco)"
+            ]
+          },
+          {
+            "titulo": "Si no programas",
+            "texto": "Haz de usuario real: anota cada fallo en una lista. Eso es QA manual y vale mucho."
+          },
+          {
+            "titulo": "Si ya programas",
+            "texto": "Añade tests automatizados donde duela más (auth, pagos). CI en GitHub Actions si puedes."
+          }
+        ],
+        "en": [
+          {
+            "titulo": "Minimum checklist",
+            "items": [
+              "Login and logout",
+              "Create / list / edit a key record",
+              "Protected route without session → 401",
+              "Mobile and desktop layout",
+              "Visible error states (no blank screen)"
+            ]
+          }
+        ]
+      },
+      "que_aprenderas": {
+        "es": ["QA manual", "Casos felices vs errores", "Responsive básico"],
+        "en": ["Manual QA", "Happy path vs errors", "Basic responsive"]
+      },
+      "archivos_tipicos": ["backend/tests/", "frontend/src/constants/testIds/"],
+      "depende_de": ["construccion"],
+      "agent_recomendado": "reviewer",
+      "model_recomendado": { "learn": "haiku", "implement": "sonnet" },
+      "prompt_learn": {
+        "es": "Arma un plan de pruebas manuales para mi MVP en lista numerada.",
+        "en": "Build a numbered manual test plan for my MVP."
+      },
+      "prompt_implement": {
+        "es": "Revisa el código del alcance indicado y corrige bugs evidentes; no agregues features nuevas.",
+        "en": "Review code in the given scope and fix obvious bugs; do not add new features."
+      },
+      "criterio_de_hecho": {
+        "es": ["Checklist de pruebas pasada", "Sin pantallas en blanco en el flujo MVP"],
+        "en": ["Test checklist passed", "No blank screens on MVP flow"]
+      },
+      "probar_en_local": {
+        "es": ["Ejecuta el checklist de arriba", "Prueba en el celular real"],
+        "en": ["Run the checklist above", "Test on a real phone"]
+      },
+      "mentalidad_senior": {
+        "es": ["Si no está probado, no está hecho", "Reproduce el bug antes de ‘arreglar’"],
+        "en": ["If it's not tested, it's not done", "Reproduce the bug before ‘fixing’"]
+      },
+      "publicar_pista": {
+        "es": "No despliegues con errores conocidos del flujo principal.",
+        "en": "Don't deploy with known errors on the main flow."
+      }
+    },
+    {
+      "id": "despliegue",
+      "titulo": { "es": "6. Despliegue", "en": "6. Deployment" },
+      "para_que": {
+        "es": "Paso a producción: dominio, hosting, o tiendas de apps.",
+        "en": "Go live: domain, hosting, or app stores."
+      },
+      "guia": {
+        "es": [
+          {
+            "titulo": "Webapp típica con esta plantilla",
+            "items": [
+              "MongoDB Atlas (base en la nube)",
+              "API en Render o Railway",
+              "Frontend en Vercel o Netlify",
+              "Variables de entorno solo en el hosting (nunca en Git)"
+            ]
+          },
+          {
+            "titulo": "APK / móvil",
+            "texto": "Compila con Capacitor; prueba en dispositivo. Play Store y App Store tienen revisión y políticas."
+          },
+          {
+            "titulo": "Si no programas",
+            "texto": "Pide ayuda para el primer deploy o sigue la guía ‘Publicarlo’ de cada paso. Tú decides el dominio y el mensaje al usuario."
+          }
+        ],
+        "en": [
+          {
+            "titulo": "Typical webapp with this template",
+            "items": [
+              "MongoDB Atlas",
+              "API on Render or Railway",
+              "Frontend on Vercel or Netlify",
+              "Env vars only on the host"
+            ]
+          }
+        ]
+      },
+      "que_aprenderas": {
+        "es": ["Qué es hosting", "Variables de entorno", "Dominio y HTTPS"],
+        "en": ["What hosting is", "Environment variables", "Domain and HTTPS"]
+      },
+      "archivos_tipicos": ["render.yaml", "frontend/vercel.json", ".env.example"],
+      "depende_de": ["pruebas"],
+      "agent_recomendado": "docs",
+      "model_recomendado": { "learn": "haiku", "implement": "sonnet" },
+      "prompt_learn": {
+        "es": "Dame el checklist de despliegue para mi tipo de app (web o móvil) con esta plantilla.",
+        "en": "Give me a deployment checklist for my app type (web or mobile) with this template."
+      },
+      "prompt_implement": {
+        "es": "Documenta pasos de deploy en docs/ según el brief (web y/o móvil), sin secretos.",
+        "en": "Document deploy steps in docs/ per the brief (web and/or mobile), no secrets."
+      },
+      "criterio_de_hecho": {
+        "es": ["URL pública responde o APK instalable", "Login funciona en producción"],
+        "en": ["Public URL responds or APK installs", "Login works in production"]
+      },
+      "probar_en_local": {
+        "es": ["Revisa .env.example", "Lista qué variables irán al hosting"],
+        "en": ["Review .env.example", "List which vars go to the host"]
+      },
+      "mentalidad_senior": {
+        "es": ["Primero staging, luego producción", "Backup de la base antes de migrar"],
+        "en": ["Staging before production", "DB backup before migrations"]
+      },
+      "publicar_pista": {
+        "es": "COOKIE_SECURE y CORS con tu dominio real en producción.",
+        "en": "COOKIE_SECURE and CORS with your real domain in production."
+      }
+    },
+    {
+      "id": "mantenimiento",
+      "titulo": { "es": "7. Mantenimiento", "en": "7. Maintenance" },
+      "para_que": {
+        "es": "Post-lanzamiento: bugs, rendimiento y nuevas versiones.",
+        "en": "After launch: bugs, performance, and new versions."
+      },
+      "guia": {
+        "es": [
+          {
+            "titulo": "Qué nunca termina",
+            "items": [
+              "Escuchar a los primeros usuarios",
+              "Corregir bugs del flujo principal primero",
+              "Medir qué pantallas se usan de verdad",
+              "Planear la siguiente iteración del MVP"
+            ]
+          },
+          {
+            "titulo": "Si no programas",
+            "texto": "Lleva un diario de fallos y pedidos. Prioriza con la regla: ¿bloquea al usuario o es un ‘nice to have’?"
+          },
+          {
+            "titulo": "Si ya programas",
+            "texto": "Issues en GitHub, versionado semver, logs y alertas básicas. No dejes secretos en el historial."
+          }
+        ],
+        "en": [
+          {
+            "titulo": "What never ends",
+            "items": [
+              "Listen to first users",
+              "Fix main-flow bugs first",
+              "Measure which screens are used",
+              "Plan the next MVP iteration"
+            ]
+          }
+        ]
+      },
+      "que_aprenderas": {
+        "es": ["Iteración", "Priorizar bugs", "Feedback real"],
+        "en": ["Iteration", "Prioritizing bugs", "Real feedback"]
+      },
+      "archivos_tipicos": ["docs/DECISIONS.md", ".github/workflows/"],
+      "depende_de": ["despliegue"],
+      "agent_recomendado": "docs",
+      "model_recomendado": { "learn": "haiku", "implement": "sonnet" },
+      "prompt_learn": {
+        "es": "Propón un plan de las 2 primeras semanas post-lanzamiento: métricas, bugs y una mejora.",
+        "en": "Propose a plan for the first 2 weeks after launch: metrics, bugs, and one improvement."
+      },
+      "prompt_implement": {
+        "es": "Documenta en docs/ un proceso de soporte e iteración (issues, prioridades) para el proyecto.",
+        "en": "Document in docs/ a support and iteration process (issues, priorities) for the project."
+      },
+      "criterio_de_hecho": {
+        "es": ["Tengo canal para reportar bugs", "Sé qué mejorar en la próxima versión"],
+        "en": ["I have a bug-report channel", "I know what to improve next"]
+      },
+      "probar_en_local": {
+        "es": ["Crea 3 issues de ejemplo", "Priorízalos P0/P1/P2"],
+        "en": ["Create 3 sample issues", "Prioritize P0/P1/P2"]
+      },
+      "mentalidad_senior": {
+        "es": ["El software vivo se mantiene", "Escucha datos, no solo opiniones"],
+        "en": ["Living software is maintained", "Listen to data, not only opinions"]
+      },
+      "publicar_pista": {
+        "es": "Cada release pequeña es más segura que un ‘big bang’ anual.",
+        "en": "Small releases are safer than a yearly big bang."
+      }
+    }
+  ]
+}
