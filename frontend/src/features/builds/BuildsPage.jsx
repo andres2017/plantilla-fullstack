@@ -16,10 +16,27 @@ import { Label } from "@/components/ui/label";
 import { getLocale, setLocale, t } from "./i18n";
 
 const ACTIVE_STATUSES = ["queued", "running"];
-const BLUEPRINT_ID = "full_stack";
+
+const PATHS = [
+  {
+    id: "ciclo_desarrollo",
+    es: "Ciclo de desarrollo (7 fases)",
+    en: "Development lifecycle (7 phases)",
+    hint_es: "De la idea al mantenimiento. Ideal para todos.",
+    hint_en: "From idea to maintenance. For everyone.",
+  },
+  {
+    id: "full_stack",
+    es: "App completa (plantilla técnica)",
+    en: "Full-stack app (technical template)",
+    hint_es: "Auth, datos, API, pantallas sobre el código real.",
+    hint_en: "Auth, data, API, screens on the real codebase.",
+  },
+];
 
 export default function BuildsPage() {
   const [locale, setLocaleState] = useState(getLocale);
+  const [blueprintId, setBlueprintId] = useState("ciclo_desarrollo");
   const [activeBuildId, setActiveBuildId] = useState(null);
   const [checkingActive, setCheckingActive] = useState(true);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -33,7 +50,7 @@ export default function BuildsPage() {
   const [budget, setBudget] = useState(null);
   const [llmStatus, setLlmStatus] = useState(null);
   const [preferredModel, setPreferredModel] = useState("sonnet");
-  const [flow, setFlow] = useState(null); // null | 'brief' | 'composer'
+  const [flow, setFlow] = useState(null);
   const [briefMeta, setBriefMeta] = useState(null);
 
   const switchLocale = (next) => {
@@ -65,18 +82,20 @@ export default function BuildsPage() {
   const loadBlueprint = useCallback(async () => {
     try {
       const [bp, prog] = await Promise.all([
-        fetchBlueprint(BLUEPRINT_ID, locale),
-        fetchBlueprintProgress(BLUEPRINT_ID, locale),
+        fetchBlueprint(blueprintId, locale),
+        fetchBlueprintProgress(blueprintId, locale),
       ]);
       setBlueprint(bp);
       setProgress(prog);
-      if (!selectedStepId && bp?.pasos?.length) {
-        setSelectedStepId(bp.pasos[0].id);
-      }
+      const firstId = bp?.pasos?.[0]?.id;
+      setSelectedStepId((prev) => {
+        if (prev && bp?.pasos?.some((p) => p.id === prev)) return prev;
+        return firstId || null;
+      });
     } catch (err) {
       toast.error(getApiError(err));
     }
-  }, [locale, selectedStepId]);
+  }, [locale, blueprintId]);
 
   useEffect(() => {
     loadBlueprint();
@@ -124,7 +143,7 @@ export default function BuildsPage() {
     try {
       const data = await estimateBuild({
         prompt: trimmed,
-        template_type: briefMeta?.projectType || BLUEPRINT_ID,
+        template_type: briefMeta?.projectType || blueprintId,
         blueprint_step_id: selectedStepId || undefined,
         mode,
         locale,
@@ -156,6 +175,13 @@ export default function BuildsPage() {
     if (data?.preferred_model) setPreferredModel(data.preferred_model);
   };
 
+  const switchPath = (id) => {
+    setBlueprintId(id);
+    setSelectedStepId(null);
+    setFlow(null);
+    setEstimate(null);
+  };
+
   return (
     <div className="mx-auto max-w-6xl space-y-6" data-testid="builds-page">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -176,6 +202,28 @@ export default function BuildsPage() {
             {t(locale, "locale_en")}
           </Button>
         </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2" data-testid="path-picker">
+        {PATHS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => switchPath(p.id)}
+            className={`rounded border px-4 py-3 text-left transition ${
+              blueprintId === p.id
+                ? "border-primary bg-primary/10 ring-1 ring-primary/30"
+                : "border-border hover:border-primary/40"
+            }`}
+          >
+            <p className="font-heading text-sm font-bold tracking-tight">
+              {locale === "en" ? p.en : p.es}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {locale === "en" ? p.hint_en : p.hint_es}
+            </p>
+          </button>
+        ))}
       </div>
 
       <ClaudeConnector locale={locale} onStatusChange={handleLlmStatus} />
@@ -244,8 +292,8 @@ export default function BuildsPage() {
               </div>
               <p className="mb-2 text-xs text-muted-foreground">
                 {locale === "en"
-                  ? "Prompt composed from your answers. Edit if needed, then estimate (tokens only after you confirm the build)."
-                  : "Prompt armado con tus respuestas. Edítalo si hace falta y estima (tokens solo al confirmar el build)."}
+                  ? "Prompt from your answers. Tokens only after you confirm the build."
+                  : "Prompt con tus respuestas. Tokens solo al confirmar el build."}
               </p>
               <Label htmlFor="build-prompt" className="text-xs uppercase tracking-[0.2em]">
                 {t(locale, "prompt_label")}
@@ -278,7 +326,7 @@ export default function BuildsPage() {
                     budget={budget}
                     onBuildCreated={handleBuildCreated}
                     createPayload={{
-                      template_type: briefMeta?.projectType || BLUEPRINT_ID,
+                      template_type: briefMeta?.projectType || blueprintId,
                       blueprint_step_id: selectedStepId || undefined,
                       blueprint_version: blueprint?.version,
                       mode,
