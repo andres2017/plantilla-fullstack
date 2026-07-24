@@ -1,94 +1,59 @@
-# Fábrica de builds (Claude Agent SDK) — guía rápida
+# Fábrica Cyberandres — guía v2.1
 
-Dashboard admin-only (`/builds` en el frontend) para editar una copia
-aislada de la plantilla con un prompt en español, vía Claude Agent SDK.
-Diseño completo en `docs/DECISIONS.md` (entrada "MISIÓN 14").
+Escuela + taller + entrega. El usuario elige un tipo de producto, ve el **mapa de pasos**, puede **aprender** o **construir**, y descarga un zip.
 
-## 1. Activar el módulo
+## Idioma
 
-En `backend/.env`:
+Selector **Español | English** en `/builds`. Preferencia en `localStorage` (`fabrica_locale`) y campo `locale` en estimate/create.
 
-```bash
-BUILDS_ENABLED=true
+## Blueprints
+
+- Fuente: `shared/blueprints/*.json` (textos bilingües `{ "es", "en" }`)
+- API:
+  - `GET /api/blueprints?locale=es|en`
+  - `GET /api/blueprints/{id}?locale=`
+  - `GET /api/blueprints/{id}/progress`
+
+Progreso = builds del admin con `blueprint_step_id` (no hay tabla checklist).
+
+## Crear build (campos opcionales)
+
+```json
+{
+  "prompt": "...",
+  "template_type": "full_stack",
+  "blueprint_step_id": "auth",
+  "mode": "learn",
+  "agent": "implementer",
+  "model": "haiku",
+  "locale": "es"
+}
 ```
 
-El resto de variables (`BUILDS_DAILY_BUDGET_USD`, `BUILDS_PER_BUILD_CAP_USD`,
-`BUILDS_MAX_QUEUE_DEPTH`, `BUILDS_MAX_TURNS`, `BUILDS_TIMEOUT_SECONDS`,
-`BUILDS_WORK_ROOT`, `BUILDS_TEMPLATE_ROOT`) ya están documentadas y con
-default sensato en `backend/.env.example`.
+`mode=learn` reduce el estimado. `has_zip` es real (`Path.is_file()`).
 
-## 2. Modo STUB vs modo AGENT
+## Local (plantilla)
 
-El modo se decide **al arrancar el proceso** según si `ANTHROPIC_API_KEY`
-está presente en el entorno (`builds/config.py::agent_mode_enabled()`):
+1. Mongo / Atlas  
+2. `backend/.env` con `BUILDS_ENABLED=true`  
+3. Backend: `start-backend-stub.ps1` o `start-backend-agent.ps1` (Windows Agent sin `--reload`)  
+4. Frontend: `npm start`  
 
-- **Sin la clave → STUB.** Simula el pipeline completo (working dir,
-  "ediciones", zip) sin llamar a Anthropic. No gasta tokens. Sirve para
-  probar UI, historial y descarga end-to-end.
-- **Con la clave → AGENT SDK real.** Ejecuta el Claude Agent SDK de verdad
-  sobre la copia aislada de la plantilla (sin Bash, tools limitadas a
-  Read/Write/Edit/Glob/Grep, tope de costo por build).
+## Publicar (recomendado por tipo)
 
-Dos scripts en `backend/` arrancan cada modo con la config correcta:
+| Tipo | Stack sugerido |
+|------|----------------|
+| full_stack | Atlas + Render/Railway (API) + Vercel/Netlify (front) |
+| web_landing | Vercel / Netlify |
+| backend_api | Render/Railway + Atlas |
+| mobile_apk | API publicada + Capacitor APK |
 
-```powershell
-cd backend
-.\start-backend-stub.ps1     # modo STUB, con --reload
-.\start-backend-agent.ps1    # modo AGENT real, SIN --reload
-```
+## Windows + Agent SDK
 
-Si PowerShell bloquea la ejecución ("running scripts is disabled on this
-system"), corré el script así en vez de cambiar la política global:
+Usar `start-backend-agent.ps1` (Proactor). No dejes procesos `--reload` huérfanos en el puerto 8001.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start-backend-stub.ps1
-```
+## Seguridad
 
-## 3. Por qué el modo AGENT en Windows corre SIN `--reload`
-
-`uvicorn --reload` en Windows fuerza `asyncio.SelectorEventLoop` en el
-proceso donde realmente corre la app (`use_subprocess=True` cuando hay
-`--reload` → `uvicorn/loops/asyncio.py` elige Selector en vez de Proactor).
-`SelectorEventLoop` **no soporta subprocesos en Windows**, y el Agent SDK
-necesita spawnear el CLI `claude` como subproceso para hacer cualquier
-build real.
-
-Sin este cuidado, el build falla con `error_code=BUILD_011_WINDOWS_EVENTLOOP`
-(antes aparecía como `BUILD_009_WORKER_ERROR` con
-`error_message="Failed to start Claude Code: "` vacío — mismo problema, sin
-diagnóstico claro). `start-backend-agent.ps1` ya arranca con `--loop none`
-para evitarlo. Detalle completo de la causa: `docs/DECISIONS.md`
-(entrada 2026-07-23, "Fix: builds fallaban en Windows...").
-
-El modo STUB no lo sufre porque no spawnea ningún subproceso.
-
-## 4. Verificar que el backend responde
-
-```bash
-# Login (guarda las cookies httpOnly de sesion)
-curl -c cookies.txt -X POST http://localhost:8001/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","password":"Admin123!"}'
-
-# Presupuesto diario de builds (requiere admin autenticado)
-curl -b cookies.txt http://localhost:8001/api/builds/budget
-```
-
-Respuesta esperada: `{"success":true,"data":{...},"error":null}`.
-
-## 5. Prompt de prueba sugerido
-
-Backend-only, acotado, fácil de verificar a simple vista en el zip:
-
-```
-Agrega un endpoint GET /api/items/stats que devuelva el total de items y
-cuántos están activos.
-Solo backend: router → service → repository.
-No toques el frontend ni auth.
-```
-
-Flujo de prueba: crear el build desde la UI (o `POST /api/builds`), seguir
-el progreso (SSE) hasta `completed`, y descargar el zip. Si el build termina
-en `failed`, la tabla de historial (`BuildHistoryTable.jsx`) muestra un
-tooltip con `error_code` y `error_message` sobre el badge de estado — no
-hace falta ir a Mongo para ver la causa.
+- No subir `.env` ni zips de prueba  
+- Agent sin Bash  
+- Literals Pydantic en template_type/agent/model/locale  

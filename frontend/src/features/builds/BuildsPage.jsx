@@ -1,33 +1,42 @@
-// Dashboard admin-only de la "fabrica Cyberandres" (MISION 14, ver
-// docs/DECISIONS.md, entrada 2026-07-23). Orquesta 5 piezas: BudgetWidget
-// (cabecera), BuildForm -> EstimatePanel (disparo), QueueProgressCard
-// (progreso en vivo via SSE) y BuildHistoryTable (listado paginado). La ruta
-// misma ya esta gateada por AdminRoute (features/auth/AdminRoute.jsx); el
-// backend es la barrera real (403 sin excepcion).
-//
-// Estado global: NO se usa Context/Zustand aqui a proposito. Todo el estado
-// (build activo, cursores de refresh) es local a esta pagina y se pasa hacia
-// abajo por props — un solo consumidor (esta ruta), sin necesidad de
-// compartir estado entre features distintas. Cada componente hijo maneja su
-// propio ciclo de fetch/loading/error (mismo patron que ItemsPage.jsx).
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { fetchBuilds } from "./api";
+import { fetchBuilds, fetchBlueprint, fetchBlueprintProgress, estimateBuild, createBuild } from "./api";
 import { getApiError } from "@/lib/api";
 import { BudgetWidget } from "./components/BudgetWidget";
-import { BuildForm } from "./components/BuildForm";
 import { QueueProgressCard } from "./components/QueueProgressCard";
 import { BuildHistoryTable } from "./components/BuildHistoryTable";
+import { BlueprintMap } from "./components/BlueprintMap";
+import { StepPanel } from "./components/StepPanel";
+import { EstimatePanel } from "./components/EstimatePanel";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { getLocale, setLocale, t } from "./i18n";
 
 const ACTIVE_STATUSES = ["queued", "running"];
+const BLUEPRINT_ID = "full_stack";
 
 export default function BuildsPage() {
+  const [locale, setLocaleState] = useState(getLocale);
   const [activeBuildId, setActiveBuildId] = useState(null);
   const [checkingActive, setCheckingActive] = useState(true);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [blueprint, setBlueprint] = useState(null);
+  const [progress, setProgress] = useState(null);
+  const [selectedStepId, setSelectedStepId] = useState(null);
+  const [prompt, setPrompt] = useState("");
+  const [mode, setMode] = useState("implement");
+  const [estimating, setEstimating] = useState(false);
+  const [estimate, setEstimate] = useState(null);
+  const [budget, setBudget] = useState(null);
 
-  // Al montar (o al refrescar la pestaña), revisa si ya hay un build
-  // queued/running para reengancharse al SSE en vez de perder el progreso.
+  const switchLocale = (next) => {
+    const v = setLocale(next);
+    setLocaleState(v);
+  };
+
+  const bumpRefresh = useCallback(() => setRefreshTick((x) => x + 1), []);
+
   useEffect(() => {
     let cancelled = false;
     fetchBuilds({ page: 1, limit: 5 })
@@ -47,37 +56,205 @@ export default function BuildsPage() {
     };
   }, []);
 
-  const bumpRefresh = useCallback(() => setRefreshTick((t) => t + 1), []);
+  const loadBlueprint = useCallback(async () => {
+    try {
+      const [bp, prog] = await Promise.all([
+        fetchBlueprint(BLUEPRINT_ID, locale),
+        fetchBlueprintProgress(BLUEPRINT_ID, locale),
+      ]);
+      setBlueprint(bp);
+      setProgress(prog);
+      if (!selectedStepId && bp?.pasos?.length) {
+        setSelectedStepId(bp.pasos[0].id);
+      }
+    } catch (err) {
+      toast.error(getApiError(err));
+    }
+  }, [locale, selectedStepId]);
 
-  const handleBuildCreated = useCallback(
-    (build) => {
-      setActiveBuildId(build.id);
-      bumpRefresh();
-    },
-    [bumpRefresh]
-  );
+  useEffect(() => {
+    loadBlueprint();
+  }, [loadBlueprint, refreshTick]);
 
-  const handleBuildFinished = useCallback(() => {
+  const selectedStep = useMemo(() => {
+    if (!blueprint?.pasos) return null;
+    return blueprint.pasos.find((s) => s.id === selectedStepId) || null;
+  }, [blueprint, selectedStepId]);
+
+  const mapSteps = useMemo(() => {
+    if (!blueprint?.pasos) return [];
+    const stateById = Object.fromEntries((progress?.steps || []).map((s) => [s.id, s.state]));
+    return blueprint.pasos.map((s) => ({
+      ...s,
+      state: stateById[s.id] || "pendiente",
+    }));
+  }, [blueprint, progress]);
+
+  const applyStep = (step, nextMode) => {
+    setSelectedStepId(step.id);
+    setMode(nextMode);
+    const text =
+      nextMode === "learn"
+        ? step.prompt_learn || step.prompt_implement || ""
+        : step.prompt_implement || step.prompt_learn || "";
+    setPrompt(text);
+    setEstimate(null);
+  };
+
+  const handleEstimate = async () => {
+    const trimmed = prompt.trim();
+    if (trimmed.length < 15) {
+      toast.error(locale === "en" ? "Write a longer prompt" : "Escribe un prompt más largo");
+      return;
+    }
+    setEstimating(true);
+    try {
+      const data = await estimateBuild({
+        prompt: trimmed,
+        template_type: BLUEPRINT_ID,
+        blueprint_step_id: selectedStepId || undefined,
+        mode,
+        locale,
+        model: selectedStep?.model_recomendado?.[mode] || undefined,
+        agent: selectedStep?.agent_recomendado || undefined,
+      });
+      setEstimate(data);
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setEstimating(false);
+    }
+  };
+
+  const handleBuildCreated = (build) => {
+    setActiveBuildId(build.id);
+    setEstimate(null);
+    bumpRefresh();
+  };
+
+  const handleBuildFinished = () => {
     setActiveBuildId(null);
     bumpRefresh();
-  }, [bumpRefresh]);
+  };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6" data-testid="builds-page">
-      <div>
-        <h1 className="font-heading text-4xl font-black tracking-tighter">Fábrica Cyberandres</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Edita una copia de la plantilla con un prompt en español, ejecutado por el Claude Agent SDK.
-        </p>
+    <div className="mx-auto max-w-6xl space-y-6" data-testid="builds-page">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-4xl font-black tracking-tighter">{t(locale, "hero_title")}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t(locale, "hero_sub")}</p>
+          {blueprint && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {blueprint.titulo} · v{blueprint.version}
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant={locale === "es" ? "default" : "outline"}
+            size="sm"
+            onClick={() => switchLocale("es")}
+            data-testid="locale-es"
+          >
+            {t(locale, "locale_es")}
+          </Button>
+          <Button
+            variant={locale === "en" ? "default" : "outline"}
+            size="sm"
+            onClick={() => switchLocale("en")}
+            data-testid="locale-en"
+          >
+            {t(locale, "locale_en")}
+          </Button>
+        </div>
       </div>
 
-      <BudgetWidget refreshKey={refreshTick} />
+      <BudgetWidget refreshKey={refreshTick} onBudgetChange={setBudget} />
 
-      {!checkingActive && !activeBuildId && <BuildForm onBuildCreated={handleBuildCreated} />}
+      {(blueprint?.local_hint || blueprint?.publish_hint) && (
+        <div className="grid gap-3 md:grid-cols-2">
+          {blueprint.local_hint && (
+            <div className="border border-border bg-card p-4 text-sm">
+              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">{t(locale, "tab_local")}</p>
+              <p className="mt-1 text-muted-foreground">{blueprint.local_hint}</p>
+            </div>
+          )}
+          {blueprint.publish_hint && (
+            <div className="border border-border bg-card p-4 text-sm">
+              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">{t(locale, "tab_publish")}</p>
+              <p className="mt-1 text-muted-foreground">{blueprint.publish_hint}</p>
+            </div>
+          )}
+        </div>
+      )}
 
-      {activeBuildId && <QueueProgressCard buildId={activeBuildId} onFinished={handleBuildFinished} />}
+      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+        <BlueprintMap
+          locale={locale}
+          steps={mapSteps}
+          progress={progress}
+          selectedId={selectedStepId}
+          onSelect={(step) => setSelectedStepId(step.id)}
+        />
+        <div className="space-y-4">
+          <StepPanel
+            locale={locale}
+            step={selectedStep}
+            onExplain={(step) => applyStep(step, "learn")}
+            onBuild={(step) => applyStep(step, "implement")}
+          />
 
-      <BuildHistoryTable refreshKey={refreshTick} />
+          {!checkingActive && !activeBuildId && (
+            <div className="border border-border bg-card p-5" data-testid="build-form">
+              <div className="mb-2 flex flex-wrap gap-2 text-xs">
+                <span className="rounded border px-2 py-0.5">{t(locale, mode === "learn" ? "mode_learn" : "mode_implement")}</span>
+                {selectedStepId && <span className="rounded border px-2 py-0.5 font-mono">{selectedStepId}</span>}
+              </div>
+              <Label htmlFor="build-prompt" className="text-xs uppercase tracking-[0.2em]">
+                {t(locale, "prompt_label")}
+              </Label>
+              <Textarea
+                id="build-prompt"
+                value={prompt}
+                onChange={(e) => {
+                  setPrompt(e.target.value);
+                  setEstimate(null);
+                }}
+                className="mt-2 min-h-[120px]"
+                data-testid="build-prompt-textarea"
+              />
+              <Button className="mt-4" disabled={estimating || prompt.trim().length < 15} onClick={handleEstimate}>
+                {estimating ? t(locale, "loading") : t(locale, "estimate")}
+              </Button>
+              {estimate && (
+                <div className="mt-5">
+                  <EstimatePanel
+                    estimate={estimate}
+                    prompt={prompt.trim()}
+                    budget={budget}
+                    onBuildCreated={handleBuildCreated}
+                    createPayload={{
+                      template_type: BLUEPRINT_ID,
+                      blueprint_step_id: selectedStepId || undefined,
+                      blueprint_version: blueprint?.version,
+                      mode,
+                      locale,
+                      agent: selectedStep?.agent_recomendado,
+                      model: selectedStep?.model_recomendado?.[mode],
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeBuildId && (
+            <QueueProgressCard buildId={activeBuildId} onFinished={handleBuildFinished} />
+          )}
+        </div>
+      </div>
+
+      <BuildHistoryTable refreshKey={refreshTick} locale={locale} />
     </div>
   );
 }
