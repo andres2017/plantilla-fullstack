@@ -30,13 +30,29 @@ async def get_budget(admin: dict = Depends(require_admin)):
 
 @router.post("/estimate", dependencies=[_write_rate])
 async def estimate(data: BuildEstimateRequest, admin: dict = Depends(require_admin)):
-    result = build_service.estimate_cost(data.prompt)
+    result = build_service.estimate_cost(
+        data.prompt,
+        template_type=data.template_type,
+        mode=data.mode,
+        model=data.model,
+    )
     return build_success_response(result)
 
 
 @router.post("", status_code=201, dependencies=[_write_rate])
 async def create_build(data: BuildCreate, admin: dict = Depends(require_admin)):
-    build = await build_service.create_build(data.prompt, created_by=admin["_id"])
+    build = await build_service.create_build(
+        data.prompt,
+        created_by=str(admin["_id"]),
+        created_by_email=admin.get("email"),
+        template_type=data.template_type,
+        blueprint_step_id=data.blueprint_step_id,
+        blueprint_version=data.blueprint_version,
+        mode=data.mode,
+        agent=data.agent,
+        model=data.model,
+        locale=data.locale,
+    )
     return build_success_response(build)
 
 
@@ -96,7 +112,6 @@ async def download_build(build_id: str, admin: dict = Depends(require_admin)):
 
 @router.get("/{build_id}/events")
 async def build_events(build_id: str, request: Request, admin: dict = Depends(require_admin)):
-    """SSE de progreso en vivo. Contrato alineado con useBuildEvents.js."""
     build = await build_service.get_build(build_id)
 
     async def event_stream():

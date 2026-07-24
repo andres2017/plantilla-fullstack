@@ -12,9 +12,32 @@ from builds.config import (
 from builds.errors import BuildHTTPException
 from builds.repositories import build_repository as repo
 
+# Multiplicadores suaves por tipo / modo (heurística, no confiar en el cliente)
+_TYPE_MULT = {
+    "full_stack": 1.0,
+    "web_landing": 0.7,
+    "backend_api": 0.6,
+    "mobile_apk": 0.85,
+    "custom": 1.0,
+}
+_MODE_MULT = {
+    "learn": 0.45,
+    "implement": 1.0,
+}
+_MODEL_MULT = {
+    "haiku": 0.35,
+    "sonnet": 1.0,
+    "opus": 1.6,
+}
 
-def estimate_cost(prompt: str) -> dict:
-    """Heuristica de costo (nunca se confia en el cliente)."""
+
+def estimate_cost(
+    prompt: str,
+    *,
+    template_type: str | None = None,
+    mode: str = "implement",
+    model: str | None = None,
+) -> dict:
     prompt_tokens = max(1, len(prompt) // 4)
     input_tokens = BUILDS_BASE_CONTEXT_TOKENS + prompt_tokens
 
@@ -25,10 +48,17 @@ def estimate_cost(prompt: str) -> dict:
     else:
         output_tokens = 15000
 
+    if mode == "learn":
+        output_tokens = min(output_tokens, 4000)
+
     cost = (
         (input_tokens / 1_000_000) * BUILDS_PRICE_INPUT_PER_MTOK_USD
         + (output_tokens / 1_000_000) * BUILDS_PRICE_OUTPUT_PER_MTOK_USD
     ) * BUILDS_ESTIMATE_SAFETY_MARGIN
+
+    cost *= _TYPE_MULT.get(template_type or "custom", 1.0)
+    cost *= _MODE_MULT.get(mode or "implement", 1.0)
+    cost *= _MODEL_MULT.get(model or "sonnet", 1.0)
 
     cost = min(cost, BUILDS_PER_BUILD_CAP_USD)
     return {
@@ -39,8 +69,20 @@ def estimate_cost(prompt: str) -> dict:
     }
 
 
-async def create_build(prompt: str, created_by: str) -> dict:
-    est = estimate_cost(prompt)
+async def create_build(
+    prompt: str,
+    created_by: str,
+    *,
+    created_by_email: str | None = None,
+    template_type: str | None = None,
+    blueprint_step_id: str | None = None,
+    blueprint_version: str | None = None,
+    mode: str = "implement",
+    agent: str | None = None,
+    model: str | None = None,
+    locale: str = "es",
+) -> dict:
+    est = estimate_cost(prompt, template_type=template_type, mode=mode, model=model)
     estimated = est["estimated_cost_usd"]
 
     if estimated > BUILDS_PER_BUILD_CAP_USD:
@@ -63,7 +105,19 @@ async def create_build(prompt: str, created_by: str) -> dict:
             f"Cola llena ({BUILDS_MAX_QUEUE_DEPTH} builds pendientes). Espera a que termine alguno.",
         )
 
-    build = await repo.create_build(prompt, estimated, created_by)
+    build = await repo.create_build(
+        prompt,
+        estimated,
+        created_by,
+        created_by_email=created_by_email,
+        template_type=template_type,
+        blueprint_step_id=blueprint_step_id,
+        blueprint_version=blueprint_version,
+        mode=mode or "implement",
+        agent=agent,
+        model=model,
+        locale=locale or "es",
+    )
     return build
 
 
@@ -100,7 +154,6 @@ async def cancel_build(build_id: str) -> dict:
     )
     await repo.append_event(build_id, f"[{now.isoformat()}] Cancelado por el administrador")
 
-    # Avisar a suscriptores SSE si el worker aun no lo noto
     try:
         from builds.services import worker
         await worker.publish(build_id, "status", {"status": "cancelled", "queue_position": None})
@@ -116,14 +169,12 @@ async def cancel_build(build_id: str) -> dict:
 
 
 def parse_progress_log(events: list) -> list:
-    """Convierte eventos string del repo a [{ts, message}] para el frontend."""
     log = []
     for ev in events or []:
         if isinstance(ev, dict) and "ts" in ev and "message" in ev:
             log.append(ev)
             continue
         text = str(ev)
-        # Formato "[iso] mensaje"
         if text.startswith("[") and "]" in text:
             end = text.index("]")
             ts = text[1:end]
